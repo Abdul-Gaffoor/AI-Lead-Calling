@@ -9,12 +9,33 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision: str = 'd7136b958406'
 down_revision: Union[str, None] = '37b12c214dbd'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+SERVICE_TYPE_VALUES = (
+    'RESIDENTIAL_SOLAR', 'PM_SURYA_GHAR', 'COMMERCIAL_SOLAR', 'INDUSTRIAL_SOLAR',
+    'AGRICULTURE_SOLAR', 'GROUND_MOUNTED_SOLAR', 'EXISTING_SOLAR_UPGRADE',
+    'SOLAR_MAINTENANCE', 'PANEL_CLEANING', 'GENERAL_ENQUIRY',
+)
+
+#: Enum types this migration introduces, dropped again on downgrade.
+NEW_ENUM_TYPES = ('campaign_status', 'campaign_lead_status', 'call_state', 'call_disposition')
+
+
+def _service_type():
+    """Reference the service_type enum created by the initial migration.
+
+    On PostgreSQL an enum is a database-wide object, so emitting CREATE TYPE
+    for it a second time fails; create_type=False reuses the existing one.
+    """
+    if op.get_bind().dialect.name == 'postgresql':
+        return postgresql.ENUM(*SERVICE_TYPE_VALUES, name='service_type', create_type=False)
+    return sa.Enum(*SERVICE_TYPE_VALUES, name='service_type')
 
 
 def upgrade() -> None:
@@ -23,7 +44,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=150), nullable=False),
     sa.Column('status', sa.Enum('DRAFT', 'RUNNING', 'PAUSED', 'STOPPED', 'COMPLETED', name='campaign_status'), nullable=False),
-    sa.Column('service', sa.Enum('RESIDENTIAL_SOLAR', 'PM_SURYA_GHAR', 'COMMERCIAL_SOLAR', 'INDUSTRIAL_SOLAR', 'AGRICULTURE_SOLAR', 'GROUND_MOUNTED_SOLAR', 'EXISTING_SOLAR_UPGRADE', 'SOLAR_MAINTENANCE', 'PANEL_CLEANING', 'GENERAL_ENQUIRY', name='service_type'), nullable=True),
+    sa.Column('service', _service_type(), nullable=True),
     sa.Column('language', sa.String(length=30), nullable=True),
     sa.Column('start_date', sa.Date(), nullable=True),
     sa.Column('window_start', sa.Time(), nullable=False),
@@ -114,3 +135,10 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_campaigns_status'), table_name='campaigns')
     op.drop_table('campaigns')
     # ### end Alembic commands ###
+
+    # Drop the enum types this migration introduced so it can be re-applied.
+    # service_type is deliberately left alone — the leads table still uses it.
+    bind = op.get_bind()
+    if bind.dialect.name == 'postgresql':
+        for type_name in NEW_ENUM_TYPES:
+            postgresql.ENUM(name=type_name).drop(bind, checkfirst=True)
