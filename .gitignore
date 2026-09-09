@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment / secrets
+.env
+*.local
+
+# Databases / uploads
+*.db
+*.sqlite3
+
+# Node (frontend, later sprints)
+node_modules/
+.next/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

@@ -15,6 +15,42 @@ AI-powered solar lead calling, qualification, follow-up and sales handoff in **T
 
 - **[docs/MVP.md](docs/MVP.md)** — the complete MVP scope: users and roles, lead pipeline, telephony setup, AI voice architecture, per-service qualification workflows, scoring, dashboards, compliance, technical stack, repository structure, deployment architecture, sprint plan, test strategy and success criteria.
 
+## Getting started (backend)
+
+Requires Python 3.11+ and Docker (for local Postgres/Redis).
+
+```bash
+# 1. Infrastructure
+docker compose up -d
+
+# 2. Python environment
+python3 -m venv .venv
+.venv/bin/pip install -r backend/requirements.txt
+
+# 3. Configuration
+cp .env.example .env   # then set a real JWT_SECRET
+
+# 4. Database schema
+.venv/bin/alembic -c database/alembic.ini upgrade head
+
+# 5. First super-admin user
+.venv/bin/python -m backend.cli create-admin \
+  --email admin@swarajsolar.com --password <password> --name "Platform Admin"
+
+# 6. Run the API
+.venv/bin/uvicorn backend.main:app --reload
+```
+
+The interactive API docs are at http://localhost:8000/docs. Run the test suite with `.venv/bin/python -m pytest`.
+
+### What works today (Sprint 1)
+
+- **Auth & RBAC** — JWT login, five roles (Super Admin, Sales Manager, Lead Operator, Sales Executive, Service/Technical Executive), account lockout after repeated failed logins, user management endpoints.
+- **Lead upload** — `POST /leads/uploads` accepts daily CSV/XLSX files (`GET /leads/template` provides the template) and runs the full validation pipeline: required-field checks, Indian mobile validation and `+91` normalization, in-file and previous-lead duplicate detection, consent checks, and DNC/opt-out suppression. Each upload returns the summary counts and rejected rows are downloadable with reasons (`/leads/uploads/{id}/rejections.csv`).
+- **Customer history** — one customer record per phone number; repeated daily uploads attach to the same customer rather than creating new identities.
+- **Opt-out/DNC** — `POST /compliance/opt-outs` adds a number to the suppression list; future uploads of that number are blocked automatically.
+- **Audit log** — uploads, user creation and opt-outs are recorded for compliance.
+
 ## Technical stack (planned)
 
 Next.js frontend · Python FastAPI backend · PostgreSQL (+ pgvector for RAG) · Redis + Celery workers · Indian cloud telephony/SIP · pluggable STT/LLM/TTS providers · Docker + Terraform/OpenTofu.
@@ -23,4 +59,7 @@ Architecture: **modular monolith + workers** for the MVP.
 
 ## Status
 
-📋 Planning complete — see the sprint-by-sprint build sequence in [docs/MVP.md](docs/MVP.md#36-build-sequence). Implementation starts with Sprint 1 (auth, data model, lead upload and validation).
+🚧 In development — see the sprint-by-sprint build sequence in [docs/MVP.md](docs/MVP.md#36-build-sequence).
+
+- ✅ **Sprint 1** — authentication, DB, customer/lead model, Excel/CSV upload, validation, duplicate and opt-out handling
+- ⬜ **Sprint 2** — campaign engine, call queue, virtual-number/telephony integration, call webhooks
