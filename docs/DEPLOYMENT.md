@@ -8,12 +8,12 @@ Pushes to `main` (and the current development branch) run `.github/workflows/dep
 
 The workflow can also be run manually from the Actions tab (workflow_dispatch). Pull requests only run the test job.
 
-## Required GitHub Actions secrets
+## Required GitHub Actions configuration
 
-Add these under **Settings → Secrets and variables → Actions**:
+The deploy job targets the GitHub environment named **`Test`** (Settings → Environments → Test). Each value can be defined there either as an **environment secret** or an **environment variable** — the workflow checks secrets first, then variables (`secrets.X || vars.X`). Repository-level secrets also work.
 
-| Secret | Purpose |
-|--------|---------|
+| Name | Purpose |
+|------|---------|
 | `SERVER_HOST` | Server hostname or IP |
 | `SERVER_USER` | SSH user (must be able to run `docker`) |
 | `SERVER_SSH_KEY` | Private SSH key for that user (the full key file contents) |
@@ -21,9 +21,9 @@ Add these under **Settings → Secrets and variables → Actions**:
 | `JWT_SECRET` | Long random string used to sign auth tokens (e.g. `openssl rand -hex 32`) |
 | `POSTGRES_PASSWORD` | Password for the production Postgres database |
 
-`GITHUB_TOKEN` is provided automatically by Actions and is used both to push the image to GHCR and to pull it on the server during the deploy — no extra registry secret is needed.
+> ⚠️ Prefer **secrets** for `SERVER_SSH_KEY`, `JWT_SECRET` and `POSTGRES_PASSWORD`: environment *variables* display their values in plain text to anyone with access to repo settings and are not masked in workflow logs; secrets are encrypted and masked.
 
-The deploy job targets the `production` environment, so you can optionally add required reviewers or environment-scoped secrets there.
+`GITHUB_TOKEN` is provided automatically by Actions and is used both to push the image to GHCR and to pull it on the server during the deploy — no extra registry secret is needed. You can also add required reviewers on the `Test` environment to gate deploys.
 
 ## Server prerequisites (one-time)
 

@@ -73,17 +73,19 @@ jobs:
     needs: build
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment: production
+    # Deployment config lives in this GitHub environment — as environment
+    # secrets or environment variables (secrets win when both exist).
+    environment: Test
     steps:
       - uses: actions/checkout@v4
 
       - name: Copy compose file to server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT || 22 }}
+          host: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER || vars.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY || vars.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || vars.SERVER_PORT || 22 }}
           source: deploy/docker-compose.prod.yml
           target: /opt/swaraj-solar
           strip_components: 1
@@ -94,13 +96,13 @@ jobs:
           APP_IMAGE: ${{ needs.build.outputs.image }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || vars.POSTGRES_PASSWORD }}
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT || 22 }}
+          host: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER || vars.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY || vars.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || vars.SERVER_PORT || 22 }}
           envs: APP_IMAGE,GHCR_USER,GHCR_TOKEN,JWT_SECRET,POSTGRES_PASSWORD
           script: |
             set -e
