@@ -345,3 +345,11 @@ def test_console_is_served(client):
     assert client.get("/").status_code == 200
     assert "Swaraj Solar" in client.get("/").text
     assert client.get("/app/app.js").status_code == 200
+
+
+def test_hidden_elements_are_actually_hidden(client):
+    """A display rule on .login-shell would otherwise outrank the browser's
+    default [hidden] rule, leaving the login overlay on screen after a
+    successful sign-in."""
+    css = client.get("/app/styles.css").text
+    assert "[hidden]" in css and "display: none !important" in css

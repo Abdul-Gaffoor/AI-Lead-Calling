@@ -27,6 +27,11 @@
 
 * { box-sizing: border-box; }
 
+/* Author `display` rules (such as .login-shell below) outrank the browser's
+   default [hidden] rule, so `el.hidden = true` would not actually hide the
+   element. This restores it. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--bg);
