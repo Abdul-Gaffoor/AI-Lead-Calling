@@ -15,6 +15,13 @@ const PAGES = [
 /* ---------- helpers ---------- */
 
 const el = (id) => document.getElementById(id);
+
+/* Toggle a screen without relying on the stylesheet: an author `display`
+   rule would otherwise outrank the browser's default [hidden] handling. */
+function setVisible(node, visible) {
+  node.hidden = !visible;
+  node.style.display = visible ? "" : "none";
+}
 const esc = (v) =>
   String(v ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -82,8 +89,8 @@ function signOut() {
   state.token = null;
   state.user = null;
   localStorage.removeItem("swaraj_token");
-  el("app").hidden = true;
-  el("login").hidden = false;
+  setVisible(el("app"), false);
+  setVisible(el("login"), true);
 }
 el("logout").addEventListener("click", signOut);
 
@@ -91,8 +98,8 @@ async function start() {
   try {
     state.user = await api("/auth/me");
   } catch (_) { signOut(); return; }
-  el("login").hidden = true;
-  el("app").hidden = false;
+  setVisible(el("login"), false);
+  setVisible(el("app"), true);
   el("whoami").textContent = `${state.user.full_name} · ${state.user.role.replace(/_/g, " ")}`;
   el("nav").innerHTML = PAGES.map(
     (p) => `<button data-page="${p.id}">${esc(p.label)}</button>`).join("");
@@ -422,4 +429,4 @@ VIEWS.calculator = async (view) => {
 
 /* ---------- boot ---------- */
 
-if (state.token) start(); else el("login").hidden = false;
+if (state.token) start(); else setVisible(el("login"), true);

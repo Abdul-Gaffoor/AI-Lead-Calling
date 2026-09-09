@@ -1,7 +1,8 @@
+import hashlib
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -71,9 +72,28 @@ def create_app() -> FastAPI:
     if frontend_dir.is_dir():
         app.mount("/app", StaticFiles(directory=frontend_dir), name="console")
 
+        def asset_version() -> str:
+            """Fingerprint of the console assets, used to bust browser caches.
+
+            Without this a browser keeps serving the previous deploy's CSS and
+            JS from cache, so a fix appears not to have shipped.
+            """
+            digest = hashlib.sha256()
+            for name in ("styles.css", "app.js"):
+                asset = frontend_dir / name
+                if asset.is_file():
+                    digest.update(asset.read_bytes())
+            return digest.hexdigest()[:12]
+
         @app.get("/", include_in_schema=False)
         def console():
-            return FileResponse(frontend_dir / "index.html")
+            version = asset_version()
+            html = (frontend_dir / "index.html").read_text(encoding="utf-8")
+            html = html.replace("/app/styles.css", f"/app/styles.css?v={version}")
+            html = html.replace("/app/app.js", f"/app/app.js?v={version}")
+            # The page itself must never be cached, or the versioned asset
+            # links inside it would be stale too.
+            return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=engine)

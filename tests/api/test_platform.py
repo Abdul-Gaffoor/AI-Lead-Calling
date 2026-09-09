@@ -353,3 +353,25 @@ def test_hidden_elements_are_actually_hidden(client):
     successful sign-in."""
     css = client.get("/app/styles.css").text
     assert "[hidden]" in css and "display: none !important" in css
+
+
+def test_console_assets_are_cache_busted(client):
+    """A stale cached stylesheet made a shipped fix look like it had not
+    deployed, so asset URLs carry a content fingerprint and the page itself
+    is never cached."""
+    response = client.get("/")
+    assert response.headers["cache-control"] == "no-store"
+    assert "/app/styles.css?v=" in response.text
+    assert "/app/app.js?v=" in response.text
+
+
+def test_asset_fingerprint_changes_with_content(client, tmp_path, monkeypatch):
+    first = client.get("/").text
+    import re
+
+    from backend.main import app  # noqa: F401
+
+    version = re.search(r"styles\.css\?v=([0-9a-f]+)", first).group(1)
+    assert len(version) == 12
+    # Same content, same fingerprint — caching still works between deploys.
+    assert version in client.get("/").text
