@@ -43,6 +43,10 @@ cp .env.example .env   # then set a real JWT_SECRET
 
 The interactive API docs are at http://localhost:8000/docs. Run the test suite with `.venv/bin/python -m pytest`.
 
+## Deployment
+
+Pushes to the deployment branches run the [CI & Deploy workflow](.github/workflows/deploy.yml): tests → Docker image build pushed to GHCR → SSH deploy to the server (compose stack with the API, Postgres and Redis; migrations run automatically on container start). Server credentials and app secrets are read from GitHub Actions secrets — see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the required secrets and one-time server setup.
+
 ### What works today (Sprint 1)
 
 - **Auth & RBAC** — JWT login, five roles (Super Admin, Sales Manager, Lead Operator, Sales Executive, Service/Technical Executive), account lockout after repeated failed logins, user management endpoints.
