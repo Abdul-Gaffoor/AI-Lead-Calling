@@ -47,13 +47,19 @@ The interactive API docs are at http://localhost:8000/docs. Run the test suite w
 
 Pushes to the deployment branches run the [CI & Deploy workflow](.github/workflows/deploy.yml): tests → Docker image build pushed to GHCR → SSH deploy to the server (compose stack with the API, Postgres and Redis; migrations run automatically on container start). Server credentials and app secrets are read from GitHub Actions secrets — see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the required secrets and one-time server setup.
 
-### What works today (Sprint 1)
+### What works today (Sprints 1–2)
 
 - **Auth & RBAC** — JWT login, five roles (Super Admin, Sales Manager, Lead Operator, Sales Executive, Service/Technical Executive), account lockout after repeated failed logins, user management endpoints.
 - **Lead upload** — `POST /leads/uploads` accepts daily CSV/XLSX files (`GET /leads/template` provides the template) and runs the full validation pipeline: required-field checks, Indian mobile validation and `+91` normalization, in-file and previous-lead duplicate detection, consent checks, and DNC/opt-out suppression. Each upload returns the summary counts and rejected rows are downloadable with reasons (`/leads/uploads/{id}/rejections.csv`).
 - **Customer history** — one customer record per phone number; repeated daily uploads attach to the same customer rather than creating new identities.
 - **Opt-out/DNC** — `POST /compliance/opt-outs` adds a number to the suppression list; future uploads of that number are blocked automatically.
 - **Audit log** — uploads, user creation and opt-outs are recorded for compliance.
+- **Campaign engine** — create campaigns with a service, language, calling window (IST), concurrency, max attempts and per-disposition retry rules; queue leads from an upload or by id; drive them through `start` / `pause` / `resume` / `stop` / `complete`.
+- **Call queue & retry engine** — a dispatcher places calls only inside the calling window, never exceeds the campaign's concurrency, retries `NO_ANSWER` / `BUSY` / `SWITCHED_OFF` on their own schedules, exhausts leads after max attempts, and honours a customer's requested callback time ahead of any retry rule. A Celery worker runs it every 30 seconds.
+- **Telephony abstraction** — `TelephonyProvider` with `place_call` / `transfer` / `hangup` / `parse_webhook`. Ships with a **mock provider (default — places no real calls)** and an Exotel implementation to enable once the business number and KYC are in place.
+- **Call dispositions & webhooks** — the fixed MVP disposition codes, a public `/calls/webhooks/{provider}` status callback (shared-token authenticated), and `POST /calls/{id}/disposition` for the AI agent or an executive to record the outcome. `DO_NOT_CALL` suppresses the number immediately, and the dispatcher re-checks suppression before every dial.
+
+Run the dispatcher locally with `.venv/bin/celery -A workers.celery_app worker --beat` (needs Redis), or trigger a single tick with `POST /campaigns/{id}/dispatch`.
 
 ## Technical stack (planned)
 
@@ -66,4 +72,5 @@ Architecture: **modular monolith + workers** for the MVP.
 🚧 In development — see the sprint-by-sprint build sequence in [docs/MVP.md](docs/MVP.md#36-build-sequence).
 
 - ✅ **Sprint 1** — authentication, DB, customer/lead model, Excel/CSV upload, validation, duplicate and opt-out handling
-- ⬜ **Sprint 2** — campaign engine, call queue, virtual-number/telephony integration, call webhooks
+- ✅ **Sprint 2** — campaign engine, call queue and retry scheduler, telephony provider abstraction (mock + Exotel), call webhooks and dispositions
+- ⬜ **Sprint 3** — real-time AI voice pipeline: Telugu/English STT and TTS, LLM integration, basic conversation

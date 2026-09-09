@@ -98,12 +98,22 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || vars.POSTGRES_PASSWORD }}
+          # Telephony — optional; defaults to the mock provider (no real calls)
+          TELEPHONY_PROVIDER: ${{ vars.TELEPHONY_PROVIDER || 'mock' }}
+          PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+          TELEPHONY_WEBHOOK_TOKEN: ${{ secrets.TELEPHONY_WEBHOOK_TOKEN }}
+          EXOTEL_SID: ${{ secrets.EXOTEL_SID }}
+          EXOTEL_API_KEY: ${{ secrets.EXOTEL_API_KEY }}
+          EXOTEL_API_TOKEN: ${{ secrets.EXOTEL_API_TOKEN }}
+          EXOTEL_CALLER_ID: ${{ vars.EXOTEL_CALLER_ID }}
+          EXOTEL_SUBDOMAIN: ${{ vars.EXOTEL_SUBDOMAIN || 'api.exotel.com' }}
+          EXOTEL_FLOW_APP_ID: ${{ vars.EXOTEL_FLOW_APP_ID }}
         with:
           host: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER || vars.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY || vars.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || vars.SERVER_PORT || 22 }}
-          envs: APP_IMAGE,GHCR_USER,GHCR_TOKEN,JWT_SECRET,POSTGRES_PASSWORD
+          envs: APP_IMAGE,GHCR_USER,GHCR_TOKEN,JWT_SECRET,POSTGRES_PASSWORD,TELEPHONY_PROVIDER,PUBLIC_BASE_URL,TELEPHONY_WEBHOOK_TOKEN,EXOTEL_SID,EXOTEL_API_KEY,EXOTEL_API_TOKEN,EXOTEL_CALLER_ID,EXOTEL_SUBDOMAIN,EXOTEL_FLOW_APP_ID
           script: |
             set -e
             cd /opt/swaraj-solar
@@ -113,10 +123,19 @@ jobs:
             APP_IMAGE=${APP_IMAGE}
             JWT_SECRET=${JWT_SECRET}
             POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            TELEPHONY_PROVIDER=${TELEPHONY_PROVIDER}
+            PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
+            TELEPHONY_WEBHOOK_TOKEN=${TELEPHONY_WEBHOOK_TOKEN}
+            EXOTEL_SID=${EXOTEL_SID}
+            EXOTEL_API_KEY=${EXOTEL_API_KEY}
+            EXOTEL_API_TOKEN=${EXOTEL_API_TOKEN}
+            EXOTEL_CALLER_ID=${EXOTEL_CALLER_ID}
+            EXOTEL_SUBDOMAIN=${EXOTEL_SUBDOMAIN}
+            EXOTEL_FLOW_APP_ID=${EXOTEL_FLOW_APP_ID}
             EOF
 
             echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
-            docker compose -f docker-compose.prod.yml pull app
+            docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker logout ghcr.io
             docker image prune -f

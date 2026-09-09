@@ -1,13 +1,28 @@
 # Production stack, deployed to the server by .github/workflows/deploy.yml.
 # Values come from the .env file the workflow writes next to this file.
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql+psycopg2://swaraj:${POSTGRES_PASSWORD}@db:5432/swaraj_solar
+  REDIS_URL: redis://redis:6379/0
+  JWT_SECRET: ${JWT_SECRET}
+  AUTO_CREATE_TABLES: "false"
+  # Telephony — defaults to the mock provider so no real calls are placed
+  # until a cloud-telephony account and virtual number are provisioned.
+  TELEPHONY_PROVIDER: ${TELEPHONY_PROVIDER:-mock}
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+  TELEPHONY_WEBHOOK_TOKEN: ${TELEPHONY_WEBHOOK_TOKEN:-}
+  EXOTEL_SID: ${EXOTEL_SID:-}
+  EXOTEL_API_KEY: ${EXOTEL_API_KEY:-}
+  EXOTEL_API_TOKEN: ${EXOTEL_API_TOKEN:-}
+  EXOTEL_CALLER_ID: ${EXOTEL_CALLER_ID:-}
+  EXOTEL_SUBDOMAIN: ${EXOTEL_SUBDOMAIN:-api.exotel.com}
+  EXOTEL_FLOW_APP_ID: ${EXOTEL_FLOW_APP_ID:-}
+
 services:
   app:
     image: ${APP_IMAGE}
     restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql+psycopg2://swaraj:${POSTGRES_PASSWORD}@db:5432/swaraj_solar
-      JWT_SECRET: ${JWT_SECRET}
-      AUTO_CREATE_TABLES: "false"
+    environment: *app-env
     ports:
       - "8000:8000"
     depends_on:
@@ -21,6 +36,16 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  # Call dispatcher: places due calls for running campaigns on a schedule.
+  worker:
+    image: ${APP_IMAGE}
+    command: ["worker"]
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      app:
+        condition: service_healthy
 
   db:
     image: postgres:16-alpine

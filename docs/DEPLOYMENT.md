@@ -25,6 +25,22 @@ The deploy job targets the GitHub environment named **`Test`** (Settings → Env
 
 `GITHUB_TOKEN` is provided automatically by Actions and is used both to push the image to GHCR and to pull it on the server during the deploy — no extra registry secret is needed. You can also add required reviewers on the `Test` environment to gate deploys.
 
+### Telephony configuration (optional until a business number is provisioned)
+
+The deployed stack defaults to `TELEPHONY_PROVIDER=mock`, which places **no real calls** — campaigns run end to end against a stub so the platform can be exercised safely. When the cloud-telephony account, KYC and virtual number are ready, add these and redeploy:
+
+| Name | Kind | Purpose |
+|------|------|---------|
+| `TELEPHONY_PROVIDER` | variable | Set to `exotel` to dial real customers |
+| `PUBLIC_BASE_URL` | variable | Public HTTPS URL of this API, so the provider can reach the status webhook |
+| `TELEPHONY_WEBHOOK_TOKEN` | secret | Shared token required on `/calls/webhooks/*` |
+| `EXOTEL_SID` / `EXOTEL_API_KEY` / `EXOTEL_API_TOKEN` | secrets | Exotel account credentials |
+| `EXOTEL_CALLER_ID` | variable | The approved business number to show as caller ID |
+| `EXOTEL_SUBDOMAIN` | variable | Defaults to `api.exotel.com` |
+| `EXOTEL_FLOW_APP_ID` | variable | Call flow/applet that connects the answered call to the AI agent |
+
+Before switching to `exotel`, confirm the exact API endpoints, request fields and callback field names against the account's own documentation — `backend/telephony/exotel.py` follows the published shape but the contract varies by provisioned product. Also confirm the caller-ID/number series against current TRAI requirements for commercial calling.
+
 ## Server prerequisites (one-time)
 
 - Docker Engine with the Compose plugin installed (`docker compose version` works).

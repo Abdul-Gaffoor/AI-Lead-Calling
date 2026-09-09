@@ -1,6 +1,10 @@
 #!/bin/sh
-# Container entrypoint: wait for the database, apply migrations, start the API.
+# Container entrypoint. First argument selects the role:
+#   api    (default) — apply migrations, then serve the API
+#   worker           — Celery worker + beat (call dispatcher)
 set -e
+
+ROLE="${1:-api}"
 
 echo "Waiting for database..."
 python - <<'PY'
@@ -23,8 +27,24 @@ print("Database did not become available in time", file=sys.stderr)
 sys.exit(1)
 PY
 
-echo "Applying database migrations..."
-alembic -c database/alembic.ini upgrade head
+case "$ROLE" in
+  api)
+    # Only the API applies migrations, so workers never race it.
+    echo "Applying database migrations..."
+    alembic -c database/alembic.ini upgrade head
 
-echo "Starting API..."
-exec uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers "${UVICORN_WORKERS:-2}"
+    echo "Starting API..."
+    exec uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers "${UVICORN_WORKERS:-2}"
+    ;;
+  worker)
+    echo "Starting Celery worker with beat..."
+    exec celery -A workers.celery_app worker --beat \
+      --loglevel "${CELERY_LOG_LEVEL:-info}" \
+      --concurrency "${CELERY_CONCURRENCY:-2}" \
+      --schedule /tmp/celerybeat-schedule
+    ;;
+  *)
+    echo "Unknown role: $ROLE (expected 'api' or 'worker')" >&2
+    exit 1
+    ;;
+esac
