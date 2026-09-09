@@ -79,3 +79,25 @@ docker compose -f docker-compose.prod.yml up -d
 ```
 
 Postgres data lives in the `pgdata` Docker volume and survives redeploys. Database backups (per the MVP security checklist) should be scheduled on the server, e.g. a cron job running `pg_dump` inside the `db` container.
+
+### AI provider configuration (optional until accounts exist)
+
+The deployed stack defaults to `mock` for all three AI providers: conversations run end to end, no network calls are made and nothing is billed. To switch on the real pipeline, add these and redeploy:
+
+| Name | Kind | Purpose |
+|------|------|---------|
+| `LLM_PROVIDER` | variable | `claude` to use the Claude API |
+| `ANTHROPIC_API_KEY` | secret | Claude API key |
+| `LLM_MODEL` | variable | Defaults to `claude-opus-5` |
+| `VOICE_PROVIDER` | variable | `elevenlabs` for text-to-speech |
+| `SPEECH_PROVIDER` | variable | `elevenlabs` to also use Scribe for speech-to-text |
+| `ELEVENLABS_API_KEY` | secret | ElevenLabs API key |
+| `ELEVENLABS_VOICE_ID` | variable | The chosen voice |
+| `ELEVENLABS_MODEL_ID` | variable | Defaults to `eleven_v3` (multilingual, covers Telugu) |
+| `ELEVENLABS_OUTPUT_FORMAT` | variable | `mp3_22050_32` by default; use `ulaw_8000` for PSTN legs |
+
+Before going live on real calls:
+
+- **Validate Telugu voice quality with native Telangana and Andhra speakers** (MVP section 37). ElevenLabs covers Telugu through its multilingual models, but its Indic showcase leads with other languages — compare against an Indic specialist before committing, which is a config change, not a rewrite.
+- **Check the concurrency limit on your ElevenLabs plan.** Limits are plan-gated and the MVP targets 5–10 concurrent calls.
+- **Model the cost per qualified lead.** At 2,000 leads/day, text-to-speech characters are a first-order cost. Static lines (the disclosure greeting, standard closings) are cached in-process rather than re-synthesized, which helps materially.

@@ -47,7 +47,7 @@ The interactive API docs are at http://localhost:8000/docs. Run the test suite w
 
 Pushes to the deployment branches run the [CI & Deploy workflow](.github/workflows/deploy.yml): tests → Docker image build pushed to GHCR → SSH deploy to the server (compose stack with the API, Postgres and Redis; migrations run automatically on container start). Server credentials and app secrets are read from GitHub Actions secrets — see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the required secrets and one-time server setup.
 
-### What works today (Sprints 1–2)
+### What works today (Sprints 1–3)
 
 - **Auth & RBAC** — JWT login, five roles (Super Admin, Sales Manager, Lead Operator, Sales Executive, Service/Technical Executive), account lockout after repeated failed logins, user management endpoints.
 - **Lead upload** — `POST /leads/uploads` accepts daily CSV/XLSX files (`GET /leads/template` provides the template) and runs the full validation pipeline: required-field checks, Indian mobile validation and `+91` normalization, in-file and previous-lead duplicate detection, consent checks, and DNC/opt-out suppression. Each upload returns the summary counts and rejected rows are downloadable with reasons (`/leads/uploads/{id}/rejections.csv`).
@@ -58,6 +58,10 @@ Pushes to the deployment branches run the [CI & Deploy workflow](.github/workflo
 - **Call queue & retry engine** — a dispatcher places calls only inside the calling window, never exceeds the campaign's concurrency, retries `NO_ANSWER` / `BUSY` / `SWITCHED_OFF` on their own schedules, exhausts leads after max attempts, and honours a customer's requested callback time ahead of any retry rule. A Celery worker runs it every 30 seconds.
 - **Telephony abstraction** — `TelephonyProvider` with `place_call` / `transfer` / `hangup` / `parse_webhook`. Ships with a **mock provider (default — places no real calls)** and an Exotel implementation to enable once the business number and KYC are in place.
 - **Call dispositions & webhooks** — the fixed MVP disposition codes, a public `/calls/webhooks/{provider}` status callback (shared-token authenticated), and `POST /calls/{id}/disposition` for the AI agent or an executive to record the outcome. `DO_NOT_CALL` suppresses the number immediately, and the dispatcher re-checks suppression before every dial.
+
+- **AI voice pipeline** — `SpeechProvider` / `LLMProvider` / `VoiceProvider` interfaces with mocks (default, no network calls or spend), a Claude implementation using structured outputs, and ElevenLabs for Telugu speech. The orchestrator runs the MVP's loop: customer audio → STT → LLM with qualification state and business rules → structured decision → TTS.
+- **Conversation handling** — every call opens with the scripted Telugu AI disclosure (never model-generated, so it cannot be skipped), gathers per-service qualification fields without re-asking anything the lead record already holds, classifies the service, and produces a structured payload plus a human-readable summary. Outcomes map straight onto the Sprint 2 dispositions.
+- **Safety rails** — opt-out and human-transfer requests are detected deterministically in Telugu and English rather than relying on model judgement; a provider failure hands off to a human instead of leaving dead air; conversations have a turn limit; and the system prompt forbids the model from ever calculating system sizes, savings, subsidies or payback (the approved solar engine does that in Sprint 8).
 
 Run the dispatcher locally with `.venv/bin/celery -A workers.celery_app worker --beat` (needs Redis), or trigger a single tick with `POST /campaigns/{id}/dispatch`.
 
@@ -73,4 +77,5 @@ Architecture: **modular monolith + workers** for the MVP.
 
 - ✅ **Sprint 1** — authentication, DB, customer/lead model, Excel/CSV upload, validation, duplicate and opt-out handling
 - ✅ **Sprint 2** — campaign engine, call queue and retry scheduler, telephony provider abstraction (mock + Exotel), call webhooks and dispositions
-- ⬜ **Sprint 3** — real-time AI voice pipeline: Telugu/English STT and TTS, LLM integration, basic conversation
+- ✅ **Sprint 3** — AI voice pipeline: pluggable STT/LLM/TTS (mock, Claude, ElevenLabs), conversation orchestrator, AI disclosure, service classification, structured extraction
+- ⬜ **Sprint 4** — residential and PM Surya Ghar workflows in depth, richer structured extraction

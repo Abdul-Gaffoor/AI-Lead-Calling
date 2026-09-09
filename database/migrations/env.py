@@ -6,7 +6,16 @@ from sqlalchemy import engine_from_config, pool
 from backend.core.config import settings
 from backend.core.database import Base
 
+# NOTE for new migrations: PostgreSQL enums are database-wide objects, so a
+# migration that adds a column reusing an existing enum (service_type is the
+# one shared across tables here) must NOT emit CREATE TYPE for it again —
+# autogenerate always will, and it fails on a real database. Reference it with
+# postgresql.ENUM(..., create_type=False) instead; see the campaigns and AI
+# migrations for the pattern. The CI "Verify migrations on PostgreSQL" job
+# applies revisions one at a time and catches this.
+
 # Import all model modules so autogenerate sees the full metadata.
+from backend.ai import models as ai_models  # noqa: F401
 from backend.auth import models as auth_models  # noqa: F401
 from backend.calls import models as call_models  # noqa: F401
 from backend.campaigns import models as campaign_models  # noqa: F401

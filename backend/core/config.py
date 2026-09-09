@@ -37,6 +37,35 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     dispatch_interval_seconds: int = 30
 
+    # ---- AI voice pipeline (MVP sections 9-11) ----
+    # Providers: "mock" makes no network calls and costs nothing.
+    speech_provider: str = "mock"  # mock | elevenlabs
+    llm_provider: str = "mock"  # mock | claude
+    voice_provider: str = "mock"  # mock | elevenlabs
+
+    default_language: str = "te-IN"
+    max_conversation_turns: int = 20
+
+    # Claude
+    anthropic_api_key: str = ""
+    llm_model: str = "claude-opus-5"
+    #: Voice turns are latency-sensitive; low effort keeps replies prompt.
+    llm_effort: str = "low"
+    llm_max_tokens: int = 1024
+    llm_timeout_seconds: float = 12.0
+
+    # ElevenLabs
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = ""
+    elevenlabs_model_id: str = "eleven_v3"
+    elevenlabs_stt_model_id: str = "scribe_v1"
+    #: PSTN is 8 kHz; ulaw_8000 avoids a resampling step on the call leg.
+    elevenlabs_output_format: str = "mp3_22050_32"
+    tts_timeout_seconds: float = 15.0
+    stt_timeout_seconds: float = 20.0
+    #: Static lines (greeting, closings) are cached rather than re-synthesized.
+    tts_cache_entries: int = 200
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
