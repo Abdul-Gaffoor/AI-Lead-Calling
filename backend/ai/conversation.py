@@ -29,6 +29,8 @@ from backend.calls.models import CallAttempt, Disposition
 from backend.calls.service import record_disposition, utcnow
 from backend.core.config import settings
 from backend.customers.models import Customer
+from backend.sales.service import create_from_call
+from backend.scoring.service import score_lead
 from backend.leads.models import Lead
 
 logger = logging.getLogger(__name__)
@@ -60,8 +62,16 @@ HUMAN_REQUEST_PHRASES = (
     "sales person tho",
 )
 
+#: A qualified lead's disposition comes from its score, not a fixed value.
+CLASSIFICATION_DISPOSITIONS = {
+    "HOT": Disposition.QUALIFIED_HOT,
+    "WARM": Disposition.QUALIFIED_WARM,
+    "COLD": Disposition.QUALIFIED_COLD,
+    "UNQUALIFIED": Disposition.QUALIFIED_COLD,
+}
+
 INTENT_DISPOSITIONS: dict[Intent, Disposition] = {
-    # Lead scoring in Sprint 6 replaces this with HOT/WARM/COLD by score.
+    # Overridden by the scoring engine; this is the fallback.
     Intent.QUALIFIED: Disposition.QUALIFIED_WARM,
     Intent.SITE_SURVEY_REQUESTED: Disposition.SITE_SURVEY_REQUESTED,
     Intent.CALLBACK_REQUESTED: Disposition.CALLBACK_REQUESTED,
@@ -263,6 +273,13 @@ def _finalize(db: Session, conversation: Conversation, decision: TurnDecision, *
     if disposition is None:
         return
 
+    # Score what was gathered, and let the score decide HOT/WARM/COLD.
+    score_result = score_lead(db, conversation.service, conversation.collected or {})
+    if decision.intent is Intent.QUALIFIED:
+        disposition = CLASSIFICATION_DISPOSITIONS.get(
+            score_result.classification, Disposition.QUALIFIED_WARM
+        )
+
     callback_at = None
     if decision.callback_at:
         try:
@@ -277,18 +294,22 @@ def _finalize(db: Session, conversation: Conversation, decision: TurnDecision, *
         attempt,
         disposition,
         summary=conversation.summary,
-        ai_payload=structured_output(conversation),
+        ai_payload=structured_output(conversation, score_result),
         callback_at=callback_at,
         actor=actor,
     )
 
+    # Hand the lead to sales, booking a site survey when one was asked for.
+    create_from_call(
+        db,
+        attempt,
+        score=score_result.score,
+        classification=score_result.classification,
+    )
 
-def structured_output(conversation: Conversation) -> dict:
-    """The structured record of the call (MVP section 21).
 
-    Lead score and HOT/WARM/COLD classification are added in Sprint 6 by the
-    scoring engine; they are deliberately not guessed here.
-    """
+def structured_output(conversation: Conversation, score_result=None) -> dict:
+    """The structured record of the call (MVP section 21)."""
     payload = {
         "lead_id": conversation.lead_id,
         "language": conversation.language,
@@ -297,6 +318,9 @@ def structured_output(conversation: Conversation) -> dict:
         "turns": conversation.turn_count,
     }
     payload.update(conversation.collected or {})
+    if score_result is not None:
+        payload["lead_score"] = score_result.score
+        payload["classification"] = score_result.classification
     return payload
 
 

@@ -47,7 +47,7 @@ The interactive API docs are at http://localhost:8000/docs. Run the test suite w
 
 Pushes to the deployment branches run the [CI & Deploy workflow](.github/workflows/deploy.yml): tests → Docker image build pushed to GHCR → SSH deploy to the server (compose stack with the API, Postgres and Redis; migrations run automatically on container start). Server credentials and app secrets are read from GitHub Actions secrets — see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the required secrets and one-time server setup.
 
-### What works today (Sprints 1–3)
+### What works today
 
 - **Auth & RBAC** — JWT login, five roles (Super Admin, Sales Manager, Lead Operator, Sales Executive, Service/Technical Executive), account lockout after repeated failed logins, user management endpoints.
 - **Lead upload** — `POST /leads/uploads` accepts daily CSV/XLSX files (`GET /leads/template` provides the template) and runs the full validation pipeline: required-field checks, Indian mobile validation and `+91` normalization, in-file and previous-lead duplicate detection, consent checks, and DNC/opt-out suppression. Each upload returns the summary counts and rejected rows are downloadable with reasons (`/leads/uploads/{id}/rejections.csv`).
@@ -62,6 +62,15 @@ Pushes to the deployment branches run the [CI & Deploy workflow](.github/workflo
 - **AI voice pipeline** — `SpeechProvider` / `LLMProvider` / `VoiceProvider` interfaces with mocks (default, no network calls or spend), a Claude implementation using structured outputs, and ElevenLabs for Telugu speech. The orchestrator runs the MVP's loop: customer audio → STT → LLM with qualification state and business rules → structured decision → TTS.
 - **Conversation handling** — every call opens with the scripted Telugu AI disclosure (never model-generated, so it cannot be skipped), gathers per-service qualification fields without re-asking anything the lead record already holds, classifies the service, and produces a structured payload plus a human-readable summary. Outcomes map straight onto the Sprint 2 dispositions.
 - **Safety rails** — opt-out and human-transfer requests are detected deterministically in Telugu and English rather than relying on model judgement; a provider failure hands off to a human instead of leaving dead air; conversations have a turn limit; and the system prompt forbids the model from ever calculating system sizes, savings, subsidies or payback (the approved solar engine does that in Sprint 8).
+
+- **Lead scoring** — per-service rules with admin-configurable weights and HOT/WARM/COLD/UNQUALIFIED bands. A qualified conversation is scored automatically and its score decides the call disposition.
+- **Solar/ROI engine** — one approved calculation shared by the website, the AI agent and sales: system size, roof area, generation, savings, cost range, subsidy, net investment and payback. Every assumption is returned with the answer, and the constants are marked for Swaraj engineering sign-off.
+- **Site surveys** — booked automatically when a customer asks for one, then worked through REQUESTED → SCHEDULED → ASSIGNED → VISITED → COMPLETED → QUOTATION REQUIRED.
+- **Sales portal** — qualified leads become opportunities, auto-assigned to the least-loaded executive, with a priority queue (hottest first), notes, follow-ups and stage tracking.
+- **Manager dashboard & funnel** — today's numbers (uploaded, attempted, connected, qualified, HOT/WARM/COLD, surveys, transfers, callbacks, opt-outs), the lead-to-order funnel with conversion rates, and call metrics.
+- **Inbound callbacks** — a returning caller is identified by number and their previous lead, last call and open opportunity are retrieved so the conversation continues instead of starting over.
+- **Website intake** — an API-key-protected endpoint for swarajsolar.com forms plus a public ROI calculator, running the same validation and suppression checks as an Excel upload.
+- **Operations console** — a web UI at `/` covering sign-in, lead upload with the validation summary, campaign creation and control, the executive queue, site surveys and the solar calculator.
 
 Run the dispatcher locally with `.venv/bin/celery -A workers.celery_app worker --beat` (needs Redis), or trigger a single tick with `POST /campaigns/{id}/dispatch`.
 
@@ -78,4 +87,14 @@ Architecture: **modular monolith + workers** for the MVP.
 - ✅ **Sprint 1** — authentication, DB, customer/lead model, Excel/CSV upload, validation, duplicate and opt-out handling
 - ✅ **Sprint 2** — campaign engine, call queue and retry scheduler, telephony provider abstraction (mock + Exotel), call webhooks and dispositions
 - ✅ **Sprint 3** — AI voice pipeline: pluggable STT/LLM/TTS (mock, Claude, ElevenLabs), conversation orchestrator, AI disclosure, service classification, structured extraction
-- ⬜ **Sprint 4** — residential and PM Surya Ghar workflows in depth, richer structured extraction
+- ✅ **Sprints 4–5** — qualification field sets for all ten services, driving the AI's questions and the scoring rules
+- ✅ **Sprint 6** — lead scoring with configurable weights, AI summaries, executive assignment, callbacks, site-survey module
+- ✅ **Sprint 7** — manager dashboard, funnel reporting, call metrics, transcripts
+- 🟡 **Sprint 8** — website lead API and central ROI engine done; **remaining: TLS/HTTPS, RAG knowledge base, recording storage, production pilot**
+
+### Not yet built
+
+- **TLS/HTTPS** — the API is plain HTTP today; put a reverse proxy in front before real customer data.
+- **RAG knowledge base** (MVP section 18) — the AI answers from its prompt, not yet from curated Swaraj content.
+- **Recording storage and quality review UI** (MVP section 29) — transcripts are stored; recordings need object storage.
+- **Live media streaming** — the conversation API is turn-based; real-time SIP media streaming is wired when the telephony account exists.

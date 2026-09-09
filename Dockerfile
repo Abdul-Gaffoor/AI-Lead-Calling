@@ -13,6 +13,7 @@ RUN pip install -r backend/requirements.txt
 COPY backend backend
 COPY workers workers
 COPY database database
+COPY frontend frontend
 COPY deploy/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

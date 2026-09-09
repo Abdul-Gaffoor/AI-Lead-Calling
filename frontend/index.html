@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Swaraj Solar — AI Sales Automation</title>
+<link rel="stylesheet" href="/app/styles.css">
+</head>
+<body>
+
+<div id="login" class="login-shell">
+  <form class="card login-card" id="login-form">
+    <div class="brand"><span class="brand-mark">☀</span> Swaraj Solar</div>
+    <p class="muted">AI Sales Automation Platform</p>
+    <label>Email<input type="email" id="email" autocomplete="username" required></label>
+    <label>Password<input type="password" id="password" autocomplete="current-password" required></label>
+    <button class="primary" type="submit">Sign in</button>
+    <p class="error" id="login-error" hidden></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">☀</span> Swaraj Solar</div>
+    <nav id="nav"></nav>
+    <div class="topbar-right">
+      <span id="whoami" class="muted"></span>
+      <button class="ghost" id="logout">Sign out</button>
+    </div>
+  </header>
+
+  <main id="view"></main>
+</div>
+
+<script src="/app/app.js"></script>
+</body>
+</html>

@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     exotel_subdomain: str = "api.exotel.com"
     exotel_flow_app_id: str = ""
 
+    #: Shared key the Swaraj website uses to post leads (MVP section 2B).
+    website_api_key: str = ""
+
     # Worker
     redis_url: str = "redis://localhost:6379/0"
     dispatch_interval_seconds: int = 30
