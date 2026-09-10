@@ -8,29 +8,71 @@
 </head>
 <body>
 
-<div id="login" class="login-shell">
-  <form class="card login-card" id="login-form">
-    <div class="brand"><span class="brand-mark">☀</span> Swaraj Solar</div>
-    <p class="muted">AI Sales Automation Platform</p>
-    <label>Email<input type="email" id="email" autocomplete="username" required></label>
-    <label>Password<input type="password" id="password" autocomplete="current-password" required></label>
-    <button class="primary" type="submit">Sign in</button>
-    <p class="error" id="login-error" hidden></p>
-  </form>
-</div>
-
-<div id="app" hidden>
-  <header class="topbar">
-    <div class="brand"><span class="brand-mark">☀</span> Swaraj Solar</div>
-    <nav id="nav"></nav>
-    <div class="topbar-right">
-      <span id="whoami" class="muted"></span>
-      <button class="ghost" id="logout">Sign out</button>
+<!-- ---------- Sign in ---------- -->
+<div id="login" class="auth">
+  <aside class="auth-brand">
+    <div class="auth-brand-inner">
+      <div class="wordmark"><span class="wordmark-mark">◐</span> Swaraj Solar</div>
+      <h1>AI Sales<br>Automation</h1>
+      <p>Every lead called, qualified and scored in Telugu and English — so your
+         executives spend their day on customers who are ready to buy.</p>
+      <ul class="auth-points">
+        <li><span>①</span> Daily leads validated, de-duplicated and screened against do-not-call</li>
+        <li><span>②</span> AI calls within your calling window, at your concurrency</li>
+        <li><span>③</span> Qualified leads scored, assigned and surveys booked</li>
+      </ul>
     </div>
-  </header>
+  </aside>
 
-  <main id="view"></main>
+  <main class="auth-form-pane">
+    <form class="auth-form" id="login-form" novalidate>
+      <h2>Sign in</h2>
+      <p class="sub">Use the account your administrator created for you.</p>
+      <label>Email
+        <input type="email" id="email" autocomplete="username"
+               placeholder="you@swarajsolar.com" required>
+      </label>
+      <label>Password
+        <input type="password" id="password" autocomplete="current-password"
+               placeholder="••••••••" required>
+      </label>
+      <button class="btn btn-primary btn-block" type="submit" id="login-submit">Sign in</button>
+      <p class="form-msg" id="login-error" role="alert" hidden></p>
+    </form>
+  </main>
 </div>
+
+<!-- ---------- Console ---------- -->
+<div id="app" class="shell" hidden>
+  <aside class="sidebar">
+    <div class="wordmark sidebar-brand"><span class="wordmark-mark">◐</span> Swaraj Solar</div>
+    <nav id="nav" aria-label="Sections"></nav>
+    <div class="sidebar-foot">
+      <div class="user">
+        <div class="avatar" id="avatar" aria-hidden="true"></div>
+        <div class="user-meta">
+          <strong id="user-name"></strong>
+          <span id="user-role"></span>
+        </div>
+      </div>
+      <button class="btn btn-quiet btn-block" id="logout">Sign out</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="btn btn-icon nav-toggle" id="nav-toggle" aria-label="Toggle navigation">☰</button>
+      <div class="topbar-titles">
+        <h1 id="page-title">Dashboard</h1>
+        <p id="page-sub"></p>
+      </div>
+      <div class="topbar-actions" id="page-actions"></div>
+    </header>
+    <main id="view" class="view"></main>
+  </div>
+</div>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
 
 <script src="/app/app.js"></script>
 </body>
