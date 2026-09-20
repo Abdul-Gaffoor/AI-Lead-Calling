@@ -6,6 +6,9 @@ x-app-env: &app-env
   REDIS_URL: redis://redis:6379/0
   JWT_SECRET: ${JWT_SECRET}
   AUTO_CREATE_TABLES: "false"
+  # Requests reach the API only from Caddy on the Docker network, so the
+  # X-Forwarded-* headers it sets are trustworthy.
+  FORWARDED_ALLOW_IPS: "*"
   # Telephony — defaults to the mock provider so no real calls are placed
   # until a cloud-telephony account and virtual number are provisioned.
   TELEPHONY_PROVIDER: ${TELEPHONY_PROVIDER:-mock}
@@ -33,8 +36,10 @@ services:
     image: ${APP_IMAGE}
     restart: unless-stopped
     environment: *app-env
+    # Loopback only: the outside world reaches the API through Caddy over
+    # HTTPS. Publishing 8000 here would leave a plaintext door open.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -53,6 +58,28 @@ services:
     command: ["worker"]
     restart: unless-stopped
     environment: *app-env
+    depends_on:
+      app:
+        condition: service_healthy
+
+  # TLS terminator (MVP section 32). Obtains and renews its certificate
+  # automatically; see deploy/Caddyfile for the two settings it reads.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      TLS_ISSUER: ${TLS_ISSUER:-internal}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and the internal CA live here; losing this volume means
+      # re-issuing on every deploy and hitting Let's Encrypt rate limits.
+      - caddydata:/data
+      - caddyconfig:/config
     depends_on:
       app:
         condition: service_healthy
@@ -81,3 +108,5 @@ services:
 volumes:
   pgdata:
   redisdata:
+  caddydata:
+  caddyconfig:

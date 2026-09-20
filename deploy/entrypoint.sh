@@ -34,7 +34,12 @@ case "$ROLE" in
     alembic -c database/alembic.ini upgrade head
 
     echo "Starting API..."
-    exec uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers "${UVICORN_WORKERS:-2}"
+    # --forwarded-allow-ips lets uvicorn honour the X-Forwarded-* headers set by
+    # the TLS terminator, so FastAPI sees https:// and the customer's address.
+    # The default keeps local runs (no proxy) from trusting arbitrary senders.
+    exec uvicorn backend.main:app --host 0.0.0.0 --port 8000 \
+      --workers "${UVICORN_WORKERS:-2}" \
+      --proxy-headers --forwarded-allow-ips "${FORWARDED_ALLOW_IPS:-127.0.0.1}"
     ;;
   worker)
     echo "Starting Celery worker with beat..."

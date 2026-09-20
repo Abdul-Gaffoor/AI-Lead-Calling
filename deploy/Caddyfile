@@ -1,0 +1,39 @@
+# TLS terminator for the Swaraj Solar API and operations console.
+#
+# The API container publishes only to 127.0.0.1, so every request from off the
+# server arrives here and is answered over HTTPS. Passwords and customer PII
+# never cross the network in the clear (MVP section 32).
+#
+# Both values are written into .env by .github/workflows/deploy.yml:
+#
+#   SITE_ADDRESS  the domain to serve, e.g. swaraj.example.com. Falls back to
+#                 the server's host/IP while no domain is configured.
+#   TLS_ISSUER    an ACME account email, for a publicly trusted Let's Encrypt
+#                 certificate, or "internal" for Caddy's own CA. An internal
+#                 certificate still encrypts the connection, but browsers warn
+#                 about it and refuse to honour HSTS — set a real domain and
+#                 email before the customer pilot.
+{
+	# Nothing on this server reconfigures Caddy at runtime.
+	admin off
+}
+
+{$SITE_ADDRESS} {
+	tls {$TLS_ISSUER}
+
+	encode zstd gzip
+
+	header {
+		# After one good HTTPS response a browser refuses plaintext for a year.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# reverse_proxy sets X-Forwarded-Proto/For/Host. Uvicorn is started with
+	# --proxy-headers and trusts them (FORWARDED_ALLOW_IPS), so FastAPI builds
+	# https:// URLs and logs the customer's address rather than the proxy's.
+	reverse_proxy app:8000
+}

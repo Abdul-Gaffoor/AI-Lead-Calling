@@ -1,0 +1,95 @@
+"""Guardrails on the deployed stack's network exposure.
+
+Both production incidents so far came from a difference between what was
+tested and what actually ran on the server. TLS is exactly that kind of
+setting: nothing in the test suite notices if the API starts answering
+plaintext on a public port again, and the failure is silent — the platform
+keeps working while passwords and customer records cross the network in the
+clear. These tests read the real deployment files.
+"""
+
+from pathlib import Path
+
+import pytest
+
+yaml = pytest.importorskip("yaml")
+
+DEPLOY_DIR = Path(__file__).resolve().parents[2] / "deploy"
+COMPOSE = DEPLOY_DIR / "docker-compose.prod.yml"
+CADDYFILE = DEPLOY_DIR / "Caddyfile"
+WORKFLOW = Path(__file__).resolve().parents[2] / ".github/workflows/deploy.yml"
+
+
+def _compose() -> dict:
+    return yaml.safe_load(COMPOSE.read_text())
+
+
+def _published_ports(service: dict) -> list[str]:
+    return [str(entry) for entry in service.get("ports", [])]
+
+
+def test_the_api_is_never_published_in_plaintext():
+    """The app container must bind to loopback only.
+
+    `"8000:8000"` publishes on every interface, which is how the API ended up
+    reachable over plain HTTP. `"127.0.0.1:8000:8000"` keeps the local health
+    check and `docker compose exec` admin tasks working without exposing it.
+    """
+    app = _compose()["services"]["app"]
+
+    for published in _published_ports(app):
+        assert published.startswith("127.0.0.1:"), (
+            f"app publishes {published!r} on all interfaces — the API would "
+            "answer plain HTTP from the internet. Bind it to 127.0.0.1."
+        )
+
+
+def test_a_tls_terminator_serves_https():
+    caddy = _compose()["services"]["caddy"]
+    published = _published_ports(caddy)
+
+    assert any(p.startswith("443:") for p in published), published
+    # Port 80 must stay open: Caddy redirects to HTTPS there and answers the
+    # ACME challenge that renews the certificate.
+    assert any(p.startswith("80:") for p in published), published
+
+
+def test_certificates_survive_a_redeploy():
+    """Without a persistent volume Caddy re-issues on every deploy and hits
+    Let's Encrypt's rate limit, which takes HTTPS down for a week."""
+    compose = _compose()
+    mounts = compose["services"]["caddy"]["volumes"]
+
+    assert any(str(m).startswith("caddydata:") for m in mounts), mounts
+    assert "caddydata" in compose["volumes"]
+
+
+def test_the_proxy_reaches_the_api_and_forces_hsts():
+    caddyfile = CADDYFILE.read_text()
+
+    assert "reverse_proxy app:8000" in caddyfile
+    assert "Strict-Transport-Security" in caddyfile
+
+
+def test_the_deploy_ships_the_proxy_config():
+    """The stack will not start if the Caddyfile is missing on the server."""
+    assert "deploy/Caddyfile" in WORKFLOW.read_text()
+
+
+def test_the_deploy_fails_when_https_does_not_answer():
+    """A deploy that leaves the proxy broken is a failed deploy: customers only
+    ever reach the platform through TLS."""
+    workflow = WORKFLOW.read_text()
+
+    assert 'https://${SITE_ADDRESS}/health' in workflow
+
+
+def test_uvicorn_trusts_only_the_proxy_for_forwarded_headers():
+    """The app must honour X-Forwarded-Proto — otherwise FastAPI answers a
+    redirect with an http:// location and drops the customer out of TLS — but
+    it must not trust those headers from arbitrary senders by default.
+    """
+    entrypoint = (DEPLOY_DIR / "entrypoint.sh").read_text()
+
+    assert "--proxy-headers" in entrypoint
+    assert '--forwarded-allow-ips "${FORWARDED_ALLOW_IPS:-127.0.0.1}"' in entrypoint

@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - claude/elegant-goodall-7skooc
+      - claude/jolly-feynman-javr2t
   pull_request:
   workflow_dispatch:
 
@@ -142,7 +142,7 @@ jobs:
           username: ${{ secrets.SERVER_USER || vars.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY || vars.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || vars.SERVER_PORT || 22 }}
-          source: deploy/docker-compose.prod.yml
+          source: deploy/docker-compose.prod.yml,deploy/Caddyfile
           target: /opt/swaraj-solar
           strip_components: 1
 
@@ -154,6 +154,12 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || vars.POSTGRES_PASSWORD }}
+          # TLS — with a domain Caddy gets a publicly trusted certificate; without
+          # one it falls back to the server host and its own CA, which still
+          # encrypts but makes browsers warn.
+          DOMAIN: ${{ vars.DOMAIN }}
+          ACME_EMAIL: ${{ vars.ACME_EMAIL }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
           # Telephony — optional; defaults to the mock provider (no real calls)
           TELEPHONY_PROVIDER: ${{ vars.TELEPHONY_PROVIDER || 'mock' }}
           PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
@@ -179,14 +185,31 @@ jobs:
           username: ${{ secrets.SERVER_USER || vars.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY || vars.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || vars.SERVER_PORT || 22 }}
-          envs: APP_IMAGE,GHCR_USER,GHCR_TOKEN,JWT_SECRET,POSTGRES_PASSWORD,TELEPHONY_PROVIDER,PUBLIC_BASE_URL,TELEPHONY_WEBHOOK_TOKEN,EXOTEL_SID,EXOTEL_API_KEY,EXOTEL_API_TOKEN,EXOTEL_CALLER_ID,EXOTEL_SUBDOMAIN,EXOTEL_FLOW_APP_ID,SPEECH_PROVIDER,LLM_PROVIDER,VOICE_PROVIDER,ANTHROPIC_API_KEY,LLM_MODEL,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,ELEVENLABS_MODEL_ID,ELEVENLABS_OUTPUT_FORMAT
+          envs: APP_IMAGE,GHCR_USER,GHCR_TOKEN,JWT_SECRET,POSTGRES_PASSWORD,DOMAIN,ACME_EMAIL,SERVER_HOST,TELEPHONY_PROVIDER,PUBLIC_BASE_URL,TELEPHONY_WEBHOOK_TOKEN,EXOTEL_SID,EXOTEL_API_KEY,EXOTEL_API_TOKEN,EXOTEL_CALLER_ID,EXOTEL_SUBDOMAIN,EXOTEL_FLOW_APP_ID,SPEECH_PROVIDER,LLM_PROVIDER,VOICE_PROVIDER,ANTHROPIC_API_KEY,LLM_MODEL,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,ELEVENLABS_MODEL_ID,ELEVENLABS_OUTPUT_FORMAT
           script: |
             set -e
             cd /opt/swaraj-solar
 
+            # A domain gets a publicly trusted certificate; with none configured
+            # fall back to the server's own host/IP and Caddy's internal CA, so
+            # the pilot is still encrypted rather than plaintext.
+            if [ -n "${DOMAIN}" ]; then
+              SITE_ADDRESS="${DOMAIN}"
+              TLS_ISSUER="${ACME_EMAIL:-internal}"
+            else
+              SITE_ADDRESS="${SERVER_HOST}"
+              TLS_ISSUER="internal"
+            fi
+            # Telephony callbacks must arrive over HTTPS at the same name.
+            if [ -z "${PUBLIC_BASE_URL}" ] && [ -n "${DOMAIN}" ]; then
+              PUBLIC_BASE_URL="https://${DOMAIN}"
+            fi
+
             umask 077
             cat > .env <<EOF
             APP_IMAGE=${APP_IMAGE}
+            SITE_ADDRESS=${SITE_ADDRESS}
+            TLS_ISSUER=${TLS_ISSUER}
             JWT_SECRET=${JWT_SECRET}
             POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
             TELEPHONY_PROVIDER=${TELEPHONY_PROVIDER}
@@ -223,13 +246,32 @@ jobs:
             docker image prune -f
 
             echo "Waiting for the API to become healthy..."
+            healthy=""
             for i in $(seq 1 30); do
               if curl -fsS http://localhost:8000/health > /dev/null 2>&1; then
-                echo "Deployment healthy."
+                healthy="yes"
+                break
+              fi
+              sleep 5
+            done
+            if [ -z "${healthy}" ]; then
+              echo "API did not become healthy in time; recent logs:"
+              docker compose -f docker-compose.prod.yml logs --tail 100 app
+              exit 1
+            fi
+
+            # The API answers, but customers only ever reach it through TLS, so a
+            # broken proxy is a failed deploy — not a healthy one.
+            # -k because the fallback certificate is issued by Caddy's own CA.
+            echo "Checking HTTPS through the proxy at ${SITE_ADDRESS}..."
+            for i in $(seq 1 24); do
+              if curl -fsSk --resolve "${SITE_ADDRESS}:443:127.0.0.1" \
+                   "https://${SITE_ADDRESS}/health" > /dev/null 2>&1; then
+                echo "Deployment healthy over HTTPS."
                 exit 0
               fi
               sleep 5
             done
-            echo "API did not become healthy in time; recent logs:"
-            docker compose -f docker-compose.prod.yml logs --tail 100 app
+            echo "HTTPS did not answer in time; recent proxy logs:"
+            docker compose -f docker-compose.prod.yml logs --tail 100 caddy
             exit 1

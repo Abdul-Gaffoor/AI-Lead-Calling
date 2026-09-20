@@ -4,7 +4,7 @@ Pushes to `main` (and the current development branch) run `.github/workflows/dep
 
 1. **Tests** — runs the full pytest suite; nothing deploys if tests fail.
 2. **Builds** — builds the backend Docker image (migrations + API, see `Dockerfile`) and pushes it to GitHub Container Registry as `ghcr.io/<owner>/<repo>:<commit-sha>`.
-3. **Deploys** — copies `deploy/docker-compose.prod.yml` to `/opt/swaraj-solar` on the server over SSH, writes the `.env` file from secrets, pulls the new image, restarts the stack, and waits for `/health` to pass. On container start the app waits for Postgres, applies Alembic migrations, then serves the API on port 8000.
+3. **Deploys** — copies `deploy/docker-compose.prod.yml` and `deploy/Caddyfile` to `/opt/swaraj-solar` on the server over SSH, writes the `.env` file from secrets, pulls the new image, restarts the stack, and waits for `/health` to pass **over HTTPS**. On container start the app waits for Postgres, applies Alembic migrations, then serves the API on port 8000 — bound to loopback, because everything from outside the server arrives through the TLS terminator.
 
 The workflow can also be run manually from the Actions tab (workflow_dispatch). Pull requests only run the test job.
 
@@ -20,8 +20,33 @@ The deploy job targets the GitHub environment named **`Test`** (Settings → Env
 | `SERVER_PORT` | SSH port — optional, defaults to 22 |
 | `JWT_SECRET` | Long random string used to sign auth tokens (e.g. `openssl rand -hex 32`) |
 | `POSTGRES_PASSWORD` | Password for the production Postgres database |
+| `DOMAIN` | Domain pointed at the server, e.g. `swaraj.example.com` — optional, see TLS below |
+| `ACME_EMAIL` | Contact address for the Let's Encrypt account — optional, used with `DOMAIN` |
 
 > ⚠️ Prefer **secrets** for `SERVER_SSH_KEY`, `JWT_SECRET` and `POSTGRES_PASSWORD`: environment *variables* display their values in plain text to anyone with access to repo settings and are not masked in workflow logs; secrets are encrypted and masked.
+
+### TLS / HTTPS
+
+The stack terminates TLS in a Caddy container (`deploy/Caddyfile`); the API
+publishes port 8000 on loopback only, so nothing answers plain HTTP from the
+internet. Caddy redirects port 80 to HTTPS and renews certificates by itself.
+
+There are two modes, chosen by whether `DOMAIN` is set:
+
+| `DOMAIN` | Certificate | Browser behaviour |
+|---|---|---|
+| set (with `ACME_EMAIL`) | Let's Encrypt, publicly trusted, auto-renewed | No warning. **Use this for the pilot.** |
+| unset | Caddy's internal CA, for the server's own host/IP | Encrypted, but a warning users must click through, and HSTS is ignored |
+
+Point the domain's A record at the server **before** the first deploy with
+`DOMAIN` set: Let's Encrypt validates over port 80, and repeated failures hit a
+rate limit that leaves HTTPS unavailable for hours.
+
+The certificates live in the `caddydata` Docker volume. Keep it across
+redeploys — deleting it forces re-issuance and risks that same rate limit.
+
+Set `PUBLIC_BASE_URL` to the `https://` URL too, so telephony callbacks arrive
+encrypted; with `DOMAIN` set and `PUBLIC_BASE_URL` empty, the deploy derives it.
 
 `GITHUB_TOKEN` is provided automatically by Actions and is used both to push the image to GHCR and to pull it on the server during the deploy — no extra registry secret is needed. You can also add required reviewers on the `Test` environment to gate deploys.
 
@@ -46,7 +71,9 @@ Before switching to `exotel`, confirm the exact API endpoints, request fields an
 - Docker Engine with the Compose plugin installed (`docker compose version` works).
 - The SSH user can run Docker (member of the `docker` group, or root).
 - The SSH user can write to `/opt/swaraj-solar` (`sudo mkdir -p /opt/swaraj-solar && sudo chown <user> /opt/swaraj-solar`).
-- Port 8000 reachable (or put nginx/Caddy in front for TLS — recommended before real use; the MVP security checklist requires TLS in production).
+- Ports **80 and 443** reachable from the internet (80 for the HTTPS redirect and
+  certificate renewal, 443 for traffic). Port 8000 should **not** be open — the
+  API is only published on loopback.
 
 ## First deployment
 
@@ -60,7 +87,14 @@ docker compose -f docker-compose.prod.yml exec app \
   --email admin@swarajsolar.com --password '<strong password>' --name "Platform Admin"
 ```
 
-Then verify: `curl http://<server>:8000/health` and open `http://<server>:8000/docs`.
+Then verify over TLS — `-k` is only needed while running on the internal
+certificate (no `DOMAIN` set):
+
+```bash
+curl -k https://<domain-or-server>/health
+```
+
+and open `https://<domain-or-server>/` for the console, `/docs` for the API.
 
 ## Operations
 
@@ -70,6 +104,9 @@ cd /opt/swaraj-solar
 # Status / logs
 docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f app
+
+# Certificate problems (issuance, renewal, ACME challenges) show up here
+docker compose -f docker-compose.prod.yml logs -f caddy
 
 # Restart
 docker compose -f docker-compose.prod.yml restart app
