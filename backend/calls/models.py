@@ -107,3 +107,34 @@ class CallAttempt(Base):
     ended_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     campaign_lead = relationship("CampaignLead")
+    recording = relationship(
+        "CallRecording", back_populates="call_attempt",
+        cascade="all, delete-orphan", uselist=False,
+    )
+
+
+class CallRecording(Base):
+    """A stored call recording (MVP section 29).
+
+    The audio itself lives in object storage; this row says where, so that a
+    retention policy can delete recordings without touching call history, and
+    so nothing has to guess a storage key from call fields.
+    """
+
+    __tablename__ = "call_recordings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    call_attempt_id: Mapped[int] = mapped_column(
+        ForeignKey("call_attempts.id"), unique=True, index=True, nullable=False
+    )
+    storage_key: Mapped[str] = mapped_column(String(300), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(80), default="audio/mpeg", nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Where it came from, when the telephony provider supplied a URL.
+    source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    call_attempt = relationship("CallAttempt", back_populates="recording")

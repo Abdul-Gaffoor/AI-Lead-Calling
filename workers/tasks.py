@@ -1,8 +1,11 @@
-"""Scheduled work: driving the call queue (MVP sections 6 and 7)."""
+"""Scheduled work: driving the call queue (MVP sections 6 and 7) and
+enforcing the recording retention period (section 32)."""
 
 import logging
 
+from backend.calls.recordings import purge_expired_recordings
 from backend.campaigns.dispatcher import complete_finished_campaigns, dispatch_all
+from backend.core.config import settings
 from backend.core.database import SessionLocal
 from workers.celery_app import celery_app
 
@@ -26,3 +29,18 @@ def complete_campaigns() -> dict:
     with SessionLocal() as db:
         count = complete_finished_campaigns(db)
     return {"completed": count}
+
+
+@celery_app.task(name="workers.tasks.purge_recordings")
+def purge_recordings() -> dict:
+    """Delete call audio past the retention period.
+
+    Off unless RECORDING_RETENTION_DAYS is set: how long customer voice data
+    may be kept is a decision for Swaraj, not a default this code should pick.
+    """
+    with SessionLocal() as db:
+        deleted = purge_expired_recordings(
+            db, older_than_days=settings.recording_retention_days
+        )
+        db.commit()
+    return {"deleted": deleted}

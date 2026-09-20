@@ -13,7 +13,15 @@ const PAGES = [
   { id: "myleads",    label: "My Leads",    glyph: "★", sub: "Your assigned queue, highest value first" },
   { id: "surveys",    label: "Site Surveys",glyph: "⊙", sub: "Survey requests and engineer visits" },
   { id: "calculator", label: "Calculator",  glyph: "∑", sub: "Approved solar sizing and ROI engine" },
+  // Recordings and transcripts are customer conversations; the API limits them
+  // to these roles, so the console does not offer a page that would 403.
+  { id: "review",     label: "Call Review", glyph: "◑", sub: "Listen back, check the AI and log what it got wrong",
+    roles: ["SUPER_ADMIN", "SALES_MANAGER"] },
 ];
+
+function visiblePages() {
+  return PAGES.filter((page) => !page.roles || page.roles.includes(state.user?.role));
+}
 
 /* ---------- utilities ---------- */
 
@@ -188,12 +196,12 @@ async function start() {
   el("avatar").textContent = state.user.full_name.split(/\s+/).map((w) => w[0])
     .slice(0, 2).join("").toUpperCase();
 
-  el("nav").innerHTML = PAGES.map((p) =>
+  el("nav").innerHTML = visiblePages().map((p) =>
     `<button data-page="${p.id}"><span class="nav-glyph">${p.glyph}</span>${esc(p.label)}</button>`).join("");
   el("nav").querySelectorAll("button").forEach((button) =>
     button.addEventListener("click", () => render(button.dataset.page)));
 
-  render(PAGES.some((p) => p.id === state.page) ? state.page : "dashboard");
+  render(visiblePages().some((p) => p.id === state.page) ? state.page : "dashboard");
 }
 
 /* ---------- router ---------- */
@@ -635,3 +643,196 @@ VIEWS.calculator = async (view) => {
 /* ---------- boot ---------- */
 
 if (state.token) start(); else setVisible(el("login"), true);
+
+/* ---------- call review (MVP section 29) ---------- */
+
+const REVIEW_FLAGS = [
+  ["WRONG_TRANSCRIPTION", "Wrong transcription"],
+  ["WRONG_QUALIFICATION", "Wrong qualification"],
+  ["WRONG_LANGUAGE", "Wrong language"],
+  ["WRONG_LEAD_SCORE", "Wrong lead score"],
+  ["BAD_AI_RESPONSE", "Bad AI response"],
+];
+
+const reviewState = { pending: true };
+
+VIEWS.review = async (view) => {
+  const summary = await api("/quality/summary");
+  const calls = await api(
+    "/quality/calls?limit=100" + (reviewState.pending ? "&reviewed=false" : "")
+  );
+
+  el("page-actions").innerHTML =
+    `<button class="btn btn-quiet btn-sm" id="review-filter">${
+      reviewState.pending ? "Show all calls" : "Show unreviewed only"}</button>`;
+  el("review-filter").addEventListener("click", () => {
+    reviewState.pending = !reviewState.pending;
+    render("review");
+  });
+
+  const flagged = REVIEW_FLAGS
+    .map(([code, label]) => [label, summary.flags[code] || 0])
+    .filter(([, count]) => count > 0);
+
+  view.innerHTML = `
+    <div class="stats section">
+      ${stat("Reviewed", summary.reviewed_calls, {
+        foot: `of ${num(summary.reviewable_calls)} answered calls`})}
+      ${stat("Coverage", summary.coverage_percent, { foot: "% of calls checked" })}
+      ${stat("Marked correct", summary.correct, {
+        foot: summary.reviews ? `${summary.accuracy_percent}% of reviews` : "no reviews yet"})}
+      ${stat("Marked incorrect", summary.incorrect, { foot: "faults logged" })}
+    </div>
+
+    ${flagged.length ? `<div class="section">${card("What the AI is getting wrong",
+      bars(flagged), "across all reviews")}</div>` : ""}
+
+    <div class="section">${plainCard(
+      reviewState.pending ? "Calls awaiting review" : "All answered calls",
+      table(
+        ["Customer", "When", { label: "Seconds" }, "Disposition", "Score", "Recording", ""],
+        calls,
+        (c) => `<tr>
+          <td class="strong">${esc(c.customer_name || "—")}<br>
+            <span style="color:var(--ink-muted);font-size:12px">${esc(c.phone || "")}</span></td>
+          <td>${esc(new Date(c.started_at).toLocaleString("en-IN"))}</td>
+          <td class="num">${c.duration_seconds ?? "—"}</td>
+          <td><span class="badge">${esc(title(c.disposition))}</span></td>
+          <td>${tierBadge(c.classification, c.lead_score)}</td>
+          <td>${c.has_recording ? "▶ Audio" : "<span style='color:var(--ink-muted)'>None</span>"}</td>
+          <td><button class="btn btn-quiet btn-sm" data-review="${c.call_id}">${
+            c.review_count ? "Reviewed" : "Review"}</button></td></tr>`,
+        emptyState(
+          reviewState.pending ? "Nothing waiting" : "No answered calls yet",
+          reviewState.pending
+            ? "Every answered call has been checked. Switch to all calls to look back."
+            : "Calls appear here once a campaign has connected to a customer.")
+      ), `${num(calls.length)} shown`)}</div>`;
+
+  view.querySelectorAll("[data-review]").forEach((button) =>
+    button.addEventListener("click", () => openReview(view, Number(button.dataset.review))));
+};
+
+async function openReview(view, callId) {
+  const call = await api(`/quality/calls/${callId}`);
+  const fields = Object.entries(call.extracted || {});
+
+  view.innerHTML = `
+    <div class="section">
+      <button class="btn btn-quiet btn-sm" id="review-back">← Back to queue</button>
+    </div>
+
+    <div class="section">${card(
+      `${call.customer_name || "Unknown"} · ${new Date(call.started_at).toLocaleString("en-IN")}`,
+      `<div class="kv">
+         <div><span>Phone</span><b>${esc(call.phone || "—")}</b></div>
+         <div><span>City</span><b>${esc(call.city || "—")}</b></div>
+         <div><span>Duration</span><b>${call.duration_seconds ?? "—"}s</b></div>
+         <div><span>Language</span><b>${esc(call.language || "—")}</b></div>
+         <div><span>Service</span><b>${esc(call.service ? title(call.service) : "—")}</b></div>
+         <div><span>Disposition</span><b>${esc(title(call.disposition))}</b></div>
+         <div><span>Lead score</span><b>${call.lead_score ?? "—"}</b></div>
+         <div><span>Classification</span><b>${esc(call.classification || "—")}</b></div>
+       </div>
+       <div id="player" class="player">${call.has_recording
+         ? `<button class="btn btn-quiet btn-sm" id="load-audio">▶ Load recording</button>`
+         : `<span class="hint">No recording stored for this call.</span>`}</div>`,
+      "call " + call.call_id)}</div>
+
+    ${call.summary ? `<div class="section">${card("AI summary",
+      `<p class="summary-text">${esc(call.summary)}</p>`)}</div>` : ""}
+
+    <div class="grid cols-2 section">
+      ${card("Transcript", call.transcript.length
+        ? `<div class="transcript">${call.transcript.map((t) => `
+             <div class="turn ${t.speaker === "AI" ? "ai" : "customer"}">
+               <span class="who">${t.speaker === "AI" ? "AI" : "Customer"}</span>
+               <p>${esc(t.text)}</p>
+             </div>`).join("")}</div>`
+        : emptyState("No transcript", "This call never reached a conversation."))}
+
+      ${card("Extracted fields", fields.length
+        ? `<div class="kv">${fields.map(([key, value]) =>
+             `<div><span>${esc(title(key))}</span><b>${esc(value)}</b></div>`).join("")}</div>`
+        : emptyState("Nothing extracted", "The AI recorded no qualification fields."))}
+    </div>
+
+    <div class="section">${card("Is this call correct?",
+      `<div class="verdict">
+         <button class="btn btn-quiet" data-verdict="CORRECT" id="v-correct">👍 Correct</button>
+         <button class="btn btn-quiet" data-verdict="INCORRECT" id="v-incorrect">👎 Incorrect</button>
+       </div>
+       <fieldset class="flags" id="flags" disabled>
+         <legend>What was wrong?</legend>
+         ${REVIEW_FLAGS.map(([code, label]) => `
+           <label class="check"><input type="checkbox" value="${code}"> ${esc(label)}</label>`).join("")}
+       </fieldset>
+       <label>Notes (optional)
+         <textarea id="review-note" rows="3"
+           placeholder="Heard the bill as 6000 instead of 7000."></textarea></label>
+       <button class="btn btn-primary" id="review-submit" disabled>Save review</button>
+       <p class="form-msg" id="review-msg" hidden></p>`,
+      call.reviews.length ? `${call.reviews.length} review(s) already` : "not yet reviewed")}</div>`;
+
+  el("review-back").addEventListener("click", () => render("review"));
+
+  // The audio endpoint needs the bearer token, so it is fetched rather than
+  // pointed at with a plain <audio src>. Each load is audited server-side.
+  const loadButton = el("load-audio");
+  if (loadButton) {
+    loadButton.addEventListener("click", async () => {
+      loadButton.disabled = true;
+      loadButton.textContent = "Loading…";
+      try {
+        const response = await fetch(`/quality/calls/${call.call_id}/recording`, {
+          headers: { Authorization: "Bearer " + state.token },
+        });
+        if (!response.ok) throw new Error("Could not load the recording");
+        const url = URL.createObjectURL(await response.blob());
+        el("player").innerHTML = `<audio controls preload="none" src="${url}"></audio>`;
+      } catch (exc) {
+        loadButton.disabled = false;
+        loadButton.textContent = "▶ Load recording";
+        toast(exc.message, "err");
+      }
+    });
+  }
+
+  let verdict = null;
+  const flagsBox = el("flags");
+  const submit = el("review-submit");
+
+  view.querySelectorAll("[data-verdict]").forEach((button) =>
+    button.addEventListener("click", () => {
+      verdict = button.dataset.verdict;
+      view.querySelectorAll("[data-verdict]").forEach((b) =>
+        b.classList.toggle("btn-primary", b === button));
+      // Faults only make sense on an incorrect call, and the API rejects the
+      // combination anyway — so the form will not let you build it.
+      flagsBox.disabled = verdict !== "INCORRECT";
+      if (flagsBox.disabled) {
+        flagsBox.querySelectorAll("input").forEach((input) => { input.checked = false; });
+      }
+      submit.disabled = false;
+    }));
+
+  submit.addEventListener("click", async () => {
+    const flags = [...flagsBox.querySelectorAll("input:checked")].map((input) => input.value);
+    if (verdict === "INCORRECT" && !flags.length) {
+      toast("Say what was wrong — pick at least one.", "err");
+      return;
+    }
+    submit.disabled = true;
+    try {
+      await api(`/quality/calls/${call.call_id}/review`, {
+        method: "POST",
+        body: { verdict, flags, note: el("review-note").value.trim() || null },
+      });
+      toast("Review saved. Thank you.", "ok");
+      render("review");
+    } catch (exc) {
+      submit.disabled = false;
+      toast(exc.message, "err");
+    }
+  });
+}

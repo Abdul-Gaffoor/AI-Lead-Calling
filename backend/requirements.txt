@@ -23,3 +23,6 @@ celery>=5.4
 redis>=5.0
 tzdata>=2024.1
 anthropic>=1.0
+# S3 recording storage (STORAGE_PROVIDER=s3). Present so switching provider is
+# an environment variable rather than a new image.
+boto3>=1.34

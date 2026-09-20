@@ -50,6 +50,12 @@ def apply_call_state(
         attempt.duration_seconds = duration_seconds
     if recording_url:
         attempt.recording_url = recording_url
+        # Pull the audio into our own storage, so review does not depend on the
+        # provider keeping the URL alive or on whoever holds that link. No-op
+        # unless FETCH_PROVIDER_RECORDINGS is set; never raises.
+        from backend.calls.recordings import fetch_from_provider
+
+        fetch_from_provider(db, attempt, recording_url)
 
     if state in ACTIVE_STATES:
         return attempt

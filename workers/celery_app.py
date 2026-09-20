@@ -31,5 +31,11 @@ celery_app.conf.update(
             "task": "workers.tasks.complete_campaigns",
             "schedule": 300.0,
         },
+        # Daily is often enough for a retention period measured in days, and it
+        # no-ops entirely unless RECORDING_RETENTION_DAYS is set.
+        "purge-recordings": {
+            "task": "workers.tasks.purge_recordings",
+            "schedule": 86400.0,
+        },
     },
 )

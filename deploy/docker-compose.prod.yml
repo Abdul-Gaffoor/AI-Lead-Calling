@@ -20,6 +20,19 @@ x-app-env: &app-env
   EXOTEL_CALLER_ID: ${EXOTEL_CALLER_ID:-}
   EXOTEL_SUBDOMAIN: ${EXOTEL_SUBDOMAIN:-api.exotel.com}
   EXOTEL_FLOW_APP_ID: ${EXOTEL_FLOW_APP_ID:-}
+  # Call recordings. "local" writes to the recordings volume below; switch to
+  # "s3" with a bucket when they outgrow one disk.
+  STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+  STORAGE_DIR: /var/lib/swaraj/recordings
+  S3_BUCKET: ${S3_BUCKET:-}
+  S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+  S3_REGION: ${S3_REGION:-}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+  # Download the recording the telephony provider reports on its webhook.
+  FETCH_PROVIDER_RECORDINGS: ${FETCH_PROVIDER_RECORDINGS:-false}
+  # 0 keeps audio indefinitely; set a number of days to age it out.
+  RECORDING_RETENTION_DAYS: ${RECORDING_RETENTION_DAYS:-0}
   # Knowledge base embeddings — mock by default (offline, no spend)
   EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-mock}
   VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
@@ -44,6 +57,8 @@ services:
     # HTTPS. Publishing 8000 here would leave a plaintext door open.
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      - recordings:/var/lib/swaraj/recordings
     depends_on:
       db:
         condition: service_healthy
@@ -62,6 +77,9 @@ services:
     command: ["worker"]
     restart: unless-stopped
     environment: *app-env
+    # The retention task deletes expired audio, so the worker needs the store.
+    volumes:
+      - recordings:/var/lib/swaraj/recordings
     depends_on:
       app:
         condition: service_healthy
@@ -117,3 +135,6 @@ volumes:
   redisdata:
   caddydata:
   caddyconfig:
+  # Call audio. Survives redeploys like the database does; deleting it loses
+  # every recording that has not aged out.
+  recordings:

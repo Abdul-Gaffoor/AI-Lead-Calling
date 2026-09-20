@@ -20,6 +20,7 @@ from backend.sales import models as sales_models  # noqa: F401
 from backend.scoring import models as scoring_models  # noqa: F401
 from backend.surveys import models as survey_models  # noqa: F401
 from backend.knowledge import models as knowledge_models  # noqa: F401
+from backend.quality import models as quality_models  # noqa: F401
 from backend.customers import models as customer_models  # noqa: F401
 from backend.leads import models as lead_models  # noqa: F401
 
@@ -31,6 +32,7 @@ from backend.compliance.router import router as compliance_router
 from backend.customers.router import router as customers_router
 from backend.knowledge.router import router as knowledge_router
 from backend.leads.public_router import router as public_router
+from backend.quality.router import router as quality_router
 from backend.leads.router import router as leads_router
 from backend.reports.router import router as reports_router
 from backend.sales.router import router as sales_router
@@ -63,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(surveys_router)
     app.include_router(sales_router)
     app.include_router(reports_router)
+    app.include_router(quality_router)
     app.include_router(public_router)
 
     @app.get("/health", tags=["system"])

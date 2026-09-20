@@ -84,6 +84,20 @@ def test_the_deploy_fails_when_https_does_not_answer():
     assert 'https://${SITE_ADDRESS}/health' in workflow
 
 
+def test_recordings_outlive_a_redeploy():
+    """Local recording storage inside a container is wiped on every deploy. The
+    audio a manager is meant to review has to be on a volume, and the worker
+    needs the same one to enforce the retention period."""
+    compose = _compose()
+
+    for service in ("app", "worker"):
+        mounts = [str(m) for m in compose["services"][service].get("volumes", [])]
+        assert any("recordings" in m for m in mounts), (
+            f"{service} has no recordings volume: {mounts}"
+        )
+    assert "recordings" in compose["volumes"]
+
+
 def test_uvicorn_trusts_only_the_proxy_for_forwarded_headers():
     """The app must honour X-Forwarded-Proto — otherwise FastAPI answers a
     redirect with an http:// location and drops the customer out of TLS — but

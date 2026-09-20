@@ -117,6 +117,29 @@ docker compose -f docker-compose.prod.yml up -d
 
 Postgres data lives in the `pgdata` Docker volume and survives redeploys. Database backups (per the MVP security checklist) should be scheduled on the server, e.g. a cron job running `pg_dump` inside the `db` container.
 
+### Call recordings (MVP sections 29, 32)
+
+Recordings default to `local`: files in the `recordings` Docker volume, which
+survives redeploys like the database does. They are never given a public URL —
+the audio leaves the system only through `GET /quality/calls/{id}/recording`,
+which is limited to Super Admin and Sales Manager and writes an audit entry
+naming who listened.
+
+| Name | Kind | Purpose |
+|------|------|---------|
+| `FETCH_PROVIDER_RECORDINGS` | variable | `true` to download the audio the telephony provider reports on its status webhook. Off by default — it is a network call to a URL a webhook supplied. |
+| `RECORDING_RETENTION_DAYS` | variable | Days to keep audio; `0` (the default) keeps it indefinitely. The nightly worker task deletes expired audio and leaves the call, transcript and disposition intact. |
+| `STORAGE_PROVIDER` | variable | `s3` to store in a bucket instead of on disk |
+| `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT_URL` | variables | Bucket, region, and endpoint for S3-compatible stores |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | secrets | Bucket credentials |
+
+**Set a retention period before the pilot.** Keeping customer voice data
+forever is a decision, and leaving the default in place makes it by accident.
+
+Back up the `recordings` volume alongside the database if the audio matters —
+`docker compose cp` or a volume snapshot; the database backup does not include
+it.
+
 ### Knowledge base (MVP section 18)
 
 The `db` container is now **`pgvector/pgvector:pg16`** rather than

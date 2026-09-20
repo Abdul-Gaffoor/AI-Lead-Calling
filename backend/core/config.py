@@ -57,6 +57,29 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 1024
     llm_timeout_seconds: float = 12.0
 
+    # ---- Call recordings (MVP sections 29, 32) ----
+    #: "local" keeps recordings on the server's disk (a Docker volume in
+    #: production); "s3" puts them in a bucket.
+    storage_provider: str = "local"  # local | s3
+    storage_dir: str = "/var/lib/swaraj/recordings"
+    s3_bucket: str = ""
+    s3_endpoint_url: str = ""
+    s3_region: str = ""
+    s3_access_key_id: str = ""
+    s3_secret_access_key: str = ""
+    #: Download the recording the telephony provider reports on its webhook.
+    #: Off by default: the mock places no real calls, and fetching from a URL a
+    #: webhook supplied is a network call that should be turned on knowingly.
+    fetch_provider_recordings: bool = False
+    recording_fetch_timeout_seconds: float = 30.0
+    #: Days to keep call audio; 0 keeps it indefinitely. How long customer
+    #: voice data may be held is Swaraj's decision, so there is no default
+    #: retention beyond "keep" until someone sets one.
+    recording_retention_days: int = 0
+    #: Refuse anything larger. A qualification call is a few minutes of speech;
+    #: far more than this is a misconfiguration, not a recording.
+    max_recording_bytes: int = 25 * 1024 * 1024
+
     # ---- Knowledge base / RAG (MVP section 18) ----
     #: "mock" is a hashed bag-of-words: offline, free, keyword-quality
     #: retrieval. "voyage" is a real multilingual embedding model.

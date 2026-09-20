@@ -1,7 +1,7 @@
 # Handover — state of the platform
 
-Last updated: 2026-09-20 · 141 tests passing on SQLite and PostgreSQL
-· 5 migrations
+Last updated: 2026-09-20 · 170 tests passing on SQLite and PostgreSQL
+· 6 migrations
 
 ---
 
@@ -58,6 +58,12 @@ Everything below is implemented, tested and deployed.
   bag-of-words, so retrieval works offline and costs nothing, at roughly
   keyword quality. **Nothing is retrieved until a person approves it**, and
   editing an approved document withdraws that approval.
+- **Recordings and quality review** (MVP §29) — recordings in object storage
+  (`local` on a volume by default, `s3` when they outgrow a disk), and a review
+  screen putting the recording, transcript, extracted fields, summary, score and
+  disposition in one place with the five MVP fault codes. Playback is limited to
+  Super Admin and Sales Manager and is audited. A nightly task enforces
+  `RECORDING_RETENTION_DAYS`, which starts at "keep indefinitely".
 - **Website lead API** and public ROI calculator, running the same suppression checks.
 - **Operations console** at `/` — sign-in, upload, campaigns, executive queue,
   surveys, calculator. Light and dark, verified down to 360px in a real browser
@@ -70,7 +76,6 @@ Everything below is implemented, tested and deployed.
 
 | Gap | Why it matters |
 |---|---|
-| **Recording storage + quality review UI** (MVP §29) | Transcripts are stored; recordings need object storage. |
 | **Real-time SIP media streaming** | The conversation API is turn-based. Wire it when the telephony account exists. |
 
 ---
@@ -80,15 +85,15 @@ Everything below is implemented, tested and deployed.
 GitHub Actions on push: tests → **migrations verified against real PostgreSQL** →
 image built and pushed to GHCR → SSH deploy → health check.
 
-Server runs four containers via `deploy/docker-compose.prod.yml`: `app`, `worker`,
-`db` (Postgres 16), `redis`. Migrations run automatically on container start.
+Server runs five containers via `deploy/docker-compose.prod.yml`: `app`, `worker`,
+`db` (PostgreSQL 16 with pgvector), `redis` and `caddy`. Migrations run automatically on container start.
 Deployment details and the required secrets: **`docs/DEPLOYMENT.md`**.
 
 The deploy job is pinned to a GitHub environment named **`Test`**. Actions secrets
 do not move between repos — recreate that environment and its values first, or the
 deploy fails at the SSH step.
 
-A fifth container, `caddy`, terminates TLS: it redirects port 80, renews its
+`caddy` terminates TLS: it redirects port 80, renews its
 certificate by itself, and is the only thing exposed to the internet — the API
 publishes 8000 on loopback. With a `DOMAIN` set the certificate is a publicly
 trusted Let's Encrypt one; with none it falls back to the server's own host and
@@ -102,8 +107,10 @@ deploy is picked up without a hard refresh.
 
 ## 4. Switching on the real providers
 
-All three default to mocks that make no network calls and cost nothing. No code
-change is needed — set environment variables and redeploy.
+Every provider — telephony, speech, LLM, voice, embeddings — defaults to a mock
+that makes no network calls and costs nothing. No code change is needed; set
+environment variables and redeploy. `docs/DEPLOYMENT.md` has the full list,
+including the embedding and recording-storage settings.
 
 | To enable | Set |
 |---|---|
@@ -143,6 +150,10 @@ Before going live:
   person vouching for specific words, so editing a document withdraws it. And
   no figure appears in the curated content: the solar engine owns every number,
   and content the model reads aloud would otherwise be a way around that rule.
+- **Review flags are fixed codes, not free text.** MVP §38 measures the platform
+  on Telugu understanding, field capture and classification accuracy; those
+  numbers only exist if the faults are countable. An "incorrect" verdict must
+  name at least one fault for the same reason.
 - **Vectors are only compared within one embedding model.** Chunks record the
   model that produced them and search filters on the active one, so switching
   provider degrades to "no knowledge" — which the AI handles — rather than to
@@ -179,9 +190,11 @@ that differed from production in exactly the way that mattered.
    cheapest large improvement to answer quality available.
 2. **Telugu voice evaluation** as soon as an ElevenLabs key exists; it may change
    the provider choice, so do it before tuning conversations around it.
-3. **Recording storage** and the quality-review UI.
-4. **Point a domain at the server** and set `DOMAIN` / `ACME_EMAIL`, so TLS uses a
+3. **Point a domain at the server** and set `DOMAIN` / `ACME_EMAIL`, so TLS uses a
    publicly trusted certificate instead of the internal fallback.
+4. **Decide a recording retention period** and set `RECORDING_RETENTION_DAYS`.
+   The default keeps customer voice data forever, which is a decision nobody
+   should make by leaving a default alone.
 5. **Real embeddings** (`EMBEDDING_PROVIDER=voyage`) once there is a key. The
    mock cannot match meaning across different words, so "how much do I save"
    will not find a passage about payback. Run `POST /knowledge/reindex` after

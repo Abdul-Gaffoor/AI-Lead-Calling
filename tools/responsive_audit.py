@@ -21,7 +21,7 @@ from playwright.sync_api import sync_playwright
 
 SIZES = [("360x800", 360, 800), ("390x844", 390, 844),
          ("768x1024", 768, 1024), ("1440x900", 1440, 900)]
-PAGES = ["dashboard", "leads", "campaigns", "myleads", "surveys", "calculator"]
+PAGES = ["dashboard", "leads", "campaigns", "myleads", "surveys", "calculator", "review"]
 
 # An element reaching past the viewport means a sideways scroll, unless it sits
 # in a box that scrolls on purpose (a wide table), where it is still reachable.

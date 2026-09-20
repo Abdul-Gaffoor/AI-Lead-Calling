@@ -40,12 +40,13 @@ Daily CSV/XLSX + website API
 `solar_engine` approved sizing/ROI maths · `surveys` site visits ·
 `sales` opportunities & assignment · `reports` dashboard & funnel ·
 `compliance` suppression list & audit log · `telephony` provider abstraction ·
-`knowledge` curated content, embeddings & retrieval
+`knowledge` curated content, embeddings & retrieval ·
+`quality` recordings, review & AI-quality metrics · `storage` object storage
 
 ## Commands
 
 ```bash
-.venv/bin/python -m pytest -q                              # 141 tests
+.venv/bin/python -m pytest -q                              # 170 tests
 .venv/bin/uvicorn backend.main:app --reload                # API + console at /
 .venv/bin/alembic -c database/alembic.ini upgrade head     # migrations
 .venv/bin/celery -A workers.celery_app worker --beat       # dispatcher (needs Redis)
