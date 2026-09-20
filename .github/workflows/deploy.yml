@@ -269,6 +269,38 @@ jobs:
             ELEVENLABS_OUTPUT_FORMAT=${ELEVENLABS_OUTPUT_FORMAT}
             EOF
 
+            # PostgreSQL only reads POSTGRES_PASSWORD when it initialises an
+            # empty data directory. Once the volume exists it keeps the password
+            # it was built with, so rotating the secret leaves every connection
+            # failing with "password authentication failed" and no hint as to
+            # why. Catch that here rather than after a ten-minute wait.
+            if [ -n "$(docker compose -f docker-compose.prod.yml ps -q db 2>/dev/null)" ]; then
+              auth_ok=""
+              for _ in $(seq 1 5); do
+                if docker compose -f docker-compose.prod.yml exec -T \
+                     -e PGPASSWORD="${POSTGRES_PASSWORD}" db \
+                     psql -h 127.0.0.1 -U swaraj -d swaraj_solar -c 'select 1' >/dev/null 2>&1; then
+                  auth_ok="yes"
+                  break
+                fi
+                sleep 3
+              done
+              if [ -z "${auth_ok}" ]; then
+                echo "ERROR: the running database rejects the current POSTGRES_PASSWORD."
+                echo "Its volume was initialised with a different one, and Postgres"
+                echo "ignores POSTGRES_PASSWORD on an existing data directory."
+                echo
+                echo "Keep the data — set the stored password to match the secret:"
+                echo "  docker compose -f docker-compose.prod.yml exec db \\"
+                echo "    psql -U swaraj -d swaraj_solar -c \"ALTER USER swaraj PASSWORD '<the secret>'\""
+                echo
+                echo "Or discard it, if there is nothing worth keeping yet:"
+                echo "  docker compose -f docker-compose.prod.yml down -v"
+                docker logout ghcr.io
+                exit 1
+              fi
+            fi
+
             echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
             docker compose -f docker-compose.prod.yml pull
 

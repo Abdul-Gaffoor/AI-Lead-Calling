@@ -67,6 +67,22 @@ The deployed stack defaults to `TELEPHONY_PROVIDER=mock`, which places **no real
 
 Before switching to `exotel`, confirm the exact API endpoints, request fields and callback field names against the account's own documentation — `backend/telephony/exotel.py` follows the published shape but the contract varies by provisioned product. Also confirm the caller-ID/number series against current TRAI requirements for commercial calling.
 
+### Rotating `POSTGRES_PASSWORD`
+
+PostgreSQL reads `POSTGRES_PASSWORD` **only when it initialises an empty data
+directory**. Once the `pgdata` volume exists it keeps the password it was built
+with, so changing the secret alone leaves every connection failing with
+`password authentication failed`. The deploy checks for this and stops with the
+remedy, but in short — to keep the data:
+
+```bash
+docker compose -f docker-compose.prod.yml exec db \
+  psql -U swaraj -d swaraj_solar -c "ALTER USER swaraj PASSWORD '<the new secret>'"
+```
+
+or, if nothing in the database is worth keeping yet, discard it and let the next
+deploy rebuild it: `docker compose -f docker-compose.prod.yml down -v`.
+
 ## Server prerequisites (one-time)
 
 - Docker Engine with the Compose plugin installed (`docker compose version` works).
