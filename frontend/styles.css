@@ -41,6 +41,9 @@
   --radius:       10px;
   --radius-sm:    7px;
   --shadow:       0 1px 2px rgba(16, 24, 40, .04), 0 2px 8px rgba(16, 24, 40, .05);
+  /* Edge cue on a table that scrolls sideways. Dark needs a light shade:
+     a black one is invisible against a near-black surface. */
+  --scroll-shade: rgba(16, 24, 40, .16);
   --sidebar-w:    236px;
 }
 
@@ -66,6 +69,7 @@
     --tier-cold:   #184f95;
     --good-ink:    #0ca30c;
     --shadow:      0 1px 2px rgba(0, 0, 0, .4), 0 2px 8px rgba(0, 0, 0, .3);
+    --scroll-shade: rgba(255, 255, 255, .13);
   }
 }
 
@@ -92,7 +96,7 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.011em; }
 
 /* ============ Sign in ============ */
 
-.auth { min-height: 100vh; display: grid; grid-template-columns: 1.05fr .95fr; }
+.auth { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: 1.05fr .95fr; }
 
 .auth-brand {
   background: linear-gradient(160deg, #1c1917 0%, #292524 55%, #3b2a17 100%);
@@ -131,14 +135,14 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.011em; }
 
 /* ============ Shell ============ */
 
-.shell { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
+.shell { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; min-height: 100dvh; }
 
 .sidebar {
   background: var(--surface);
   border-right: 1px solid var(--hairline);
   display: flex; flex-direction: column;
   padding: 18px 12px 12px;
-  position: sticky; top: 0; height: 100vh;
+  position: sticky; top: 0; height: 100vh; height: 100dvh;
 }
 .sidebar-brand { padding: 0 10px 20px; }
 .sidebar nav { display: grid; gap: 2px; flex: 1; align-content: start; }
@@ -186,10 +190,15 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.011em; }
 
 .view { padding: 24px 26px 56px; max-width: 1280px; width: 100%; }
 
+/* Above the drawer breakpoint the sidebar is always on screen, so the scrim
+   must not exist at all — it would cover the whole console. */
+.nav-scrim { display: none; }
+
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
   .sidebar {
-    position: fixed; z-index: 40; width: var(--sidebar-w); height: 100vh;
+    position: fixed; z-index: 40; width: var(--sidebar-w);
+    height: 100vh; height: 100dvh;
     transform: translateX(-100%); transition: transform .18s ease;
     box-shadow: var(--shadow);
   }
@@ -197,6 +206,18 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.011em; }
   .topbar .nav-toggle { display: inline-flex; }
   .view { padding: 18px 16px 48px; }
   .topbar { padding: 14px 16px; }
+
+  .nav-scrim {
+    display: block; position: fixed; inset: 0; z-index: 35;
+    border: 0; padding: 0; cursor: pointer;
+    background: rgba(0, 0, 0, .42);
+    opacity: 0; pointer-events: none; transition: opacity .18s ease;
+  }
+  .shell.nav-open .nav-scrim { opacity: 1; pointer-events: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .nav-scrim { transition: none; }
 }
 
 /* ============ Primitives ============ */
@@ -293,7 +314,16 @@ form.stack { display: grid; gap: 14px; }
 
 /* ============ Tables ============ */
 
-.table-wrap { overflow-x: auto; }
+.table-wrap {
+  overflow-x: auto;
+  /* Edge shadows that appear only while there is more table to scroll to —
+     without them a clipped column on a phone just looks like missing data. */
+  background:
+    linear-gradient(to right, var(--surface) 30%, transparent) left center / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 30%, transparent) right center / 24px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--scroll-shade), transparent) left center / 11px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--scroll-shade), transparent) right center / 11px 100% no-repeat scroll;
+}
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 thead th {
   text-align: left; padding: 9px 14px;
@@ -351,3 +381,30 @@ td.strong { font-weight: 550; }
 }
 .toast.ok { border-left-color: var(--good); }
 .toast.err { border-left-color: var(--critical); }
+
+/* ============ Phone layout ============
+   Last in the file on purpose: these override base rules defined above. */
+
+@media (max-width: 900px) {
+  /* Thumbs, not mouse pointers. The nav toggle matters most — below this it is
+     the only way to reach navigation at all. */
+  .btn { min-height: 40px; }
+  .btn-sm { min-height: 36px; }
+  .btn-icon { min-width: 40px; min-height: 40px; justify-content: center; }
+  .sidebar nav button { min-height: 40px; }
+}
+
+@media (max-width: 560px) {
+  /* Two 150px fields side by side truncate "September residential leads"
+     and the lead-list name in the select. One field per row instead. */
+  .field-row > label,
+  .field-row > .btn { flex-basis: 100%; }
+
+  /* A card title and its hint on one line leaves the title wrapping over
+     three lines in a narrow column. */
+  .card-head { flex-direction: column; align-items: flex-start; gap: 3px; }
+
+  /* Reclaim horizontal room so fewer columns are scrolled out of sight. */
+  thead th { padding: 9px 11px; }
+  tbody td { padding: 10px 11px; }
+}

@@ -44,6 +44,10 @@
 
 <!-- ---------- Console ---------- -->
 <div id="app" class="shell" hidden>
+  <!-- Dims the console and closes the drawer when tapped. A button, so it is
+       reachable by keyboard and announced, and hidden above the drawer width. -->
+  <button class="nav-scrim" id="nav-scrim" tabindex="-1" aria-label="Close navigation"></button>
+
   <aside class="sidebar">
     <div class="wordmark sidebar-brand"><span class="wordmark-mark">◐</span> Swaraj Solar</div>
     <nav id="nav" aria-label="Sections"></nav>

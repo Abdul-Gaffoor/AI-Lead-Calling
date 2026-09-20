@@ -53,7 +53,9 @@ Everything below is implemented, tested and deployed.
 - **Manager dashboard and funnel** with conversion rates and call metrics.
 - **Website lead API** and public ROI calculator, running the same suppression checks.
 - **Operations console** at `/` — sign-in, upload, campaigns, executive queue,
-  surveys, calculator. Light and dark.
+  surveys, calculator. Light and dark, verified down to 360px in a real browser
+  (`tools/responsive_audit.py`): no page scrolls sideways, the drawer dims and
+  dismisses the console behind it, and controls meet tap-target sizes.
 
 ---
 
@@ -61,11 +63,9 @@ Everything below is implemented, tested and deployed.
 
 | Gap | Why it matters |
 |---|---|
-| **TLS/HTTPS** | The API is plain HTTP. Passwords cross the network in the clear. **Do this before real customer data.** ~15 min with Caddy; needs a domain or a self-signed cert. |
 | **RAG knowledge base** (MVP §18) | The AI answers from its prompt, not curated Swaraj content. Plan: pgvector in the existing database, not a second datastore. |
 | **Recording storage + quality review UI** (MVP §29) | Transcripts are stored; recordings need object storage. |
 | **Real-time SIP media streaming** | The conversation API is turn-based. Wire it when the telephony account exists. |
-| **Mobile verification** | Responsive layout is implemented but only verified at desktop width. |
 
 ---
 
@@ -81,6 +81,13 @@ Deployment details and the required secrets: **`docs/DEPLOYMENT.md`**.
 The deploy job is pinned to a GitHub environment named **`Test`**. Actions secrets
 do not move between repos — recreate that environment and its values first, or the
 deploy fails at the SSH step.
+
+A fifth container, `caddy`, terminates TLS: it redirects port 80, renews its
+certificate by itself, and is the only thing exposed to the internet — the API
+publishes 8000 on loopback. With a `DOMAIN` set the certificate is a publicly
+trusted Let's Encrypt one; with none it falls back to the server's own host and
+Caddy's internal CA, which encrypts but makes browsers warn. **Set a domain
+before the customer pilot.** The deploy fails if HTTPS does not answer.
 
 Console assets are content-fingerprinted and the page is served `no-store`, so a
 deploy is picked up without a hard refresh.
@@ -142,9 +149,9 @@ that differed from production in exactly the way that mattered.
 
 ## 6. Suggested next steps, in order
 
-1. **TLS in front of the API** — the only item that blocks handling real customer data.
-2. **Verify the mobile layout** if executives will use this on phones.
-3. **Telugu voice evaluation** as soon as an ElevenLabs key exists; it may change
+1. **Telugu voice evaluation** as soon as an ElevenLabs key exists; it may change
    the provider choice, so do it before tuning conversations around it.
-4. **RAG knowledge base** with pgvector.
-5. **Recording storage** and the quality-review UI.
+2. **RAG knowledge base** with pgvector.
+3. **Recording storage** and the quality-review UI.
+4. **Point a domain at the server** and set `DOMAIN` / `ACME_EMAIL`, so TLS uses a
+   publicly trusted certificate instead of the internal fallback.

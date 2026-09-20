@@ -168,6 +168,12 @@ function signOut() {
 el("logout").addEventListener("click", signOut);
 
 el("nav-toggle").addEventListener("click", () => el("app").classList.toggle("nav-open"));
+// On a phone the drawer covers the console, so it needs the two ways out
+// people expect: tap the dimmed area, or press Escape.
+el("nav-scrim").addEventListener("click", () => el("app").classList.remove("nav-open"));
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") el("app").classList.remove("nav-open");
+});
 
 async function start() {
   try {
