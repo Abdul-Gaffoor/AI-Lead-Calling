@@ -107,6 +107,34 @@ def test_a_password_with_url_characters_still_connects(monkeypatch):
     assert url.password == awkward, "the password must survive encoding intact"
 
 
+def test_alembic_can_take_a_percent_encoded_url(monkeypatch):
+    """Alembic stores the URL in a ConfigParser, which reads "%" as
+    interpolation syntax — so percent-encoding the password made every
+    migration crash at startup with "invalid interpolation syntax". env.py
+    doubles the percent signs; this proves the escape actually works.
+    """
+    from configparser import ConfigParser
+
+    from backend.core.config import Settings
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    url = Settings(_env_file=None, postgres_password="p@ss:w/rd#1 ?&%").database_url
+    assert "%" in url, "this test is pointless unless the URL is encoded"
+
+    parser = ConfigParser()
+    parser.add_section("alembic")
+    parser.set("alembic", "sqlalchemy.url", url.replace("%", "%%"))
+
+    assert parser.get("alembic", "sqlalchemy.url") == url, (
+        "the escape must round-trip to the original URL"
+    )
+
+
+def test_migrations_escape_the_url_for_configparser():
+    env_py = Path(__file__).resolve().parents[2] / "database/migrations/env.py"
+    assert 'replace("%", "%%")' in env_py.read_text()
+
+
 def test_an_explicit_database_url_always_wins():
     """Tests point at SQLite this way, so the parts must never override it."""
     from backend.core.config import Settings

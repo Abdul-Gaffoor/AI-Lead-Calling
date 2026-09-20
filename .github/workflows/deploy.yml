@@ -208,6 +208,9 @@ jobs:
           username: ${{ secrets.SERVER_USER || vars.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY || vars.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || vars.SERVER_PORT || 22 }}
+          # Longer than every timeout inside the script, so a failure is always
+          # reported by the script rather than by the session being cut off.
+          command_timeout: 20m
           envs: APP_IMAGE,GHCR_USER,GHCR_TOKEN,JWT_SECRET,POSTGRES_PASSWORD,DOMAIN,ACME_EMAIL,SERVER_HOST,DEPLOY_DIR,TELEPHONY_PROVIDER,PUBLIC_BASE_URL,TELEPHONY_WEBHOOK_TOKEN,EXOTEL_SID,EXOTEL_API_KEY,EXOTEL_API_TOKEN,EXOTEL_CALLER_ID,EXOTEL_SUBDOMAIN,EXOTEL_FLOW_APP_ID,STORAGE_PROVIDER,S3_BUCKET,S3_ENDPOINT_URL,S3_REGION,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,FETCH_PROVIDER_RECORDINGS,RECORDING_RETENTION_DAYS,EMBEDDING_PROVIDER,VOYAGE_API_KEY,EMBEDDING_MODEL,SPEECH_PROVIDER,LLM_PROVIDER,VOICE_PROVIDER,ANTHROPIC_API_KEY,LLM_MODEL,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,ELEVENLABS_MODEL_ID,ELEVENLABS_OUTPUT_FORMAT
           script: |
             set -e
@@ -269,9 +272,20 @@ jobs:
             echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
             docker compose -f docker-compose.prod.yml pull
 
-            if ! docker compose -f docker-compose.prod.yml up -d --remove-orphans; then
-              echo "Stack failed to start; recent app logs:"
-              docker compose -f docker-compose.prod.yml logs --tail 100 app || true
+            # `up -d` blocks while it waits for the app's healthcheck, because
+            # worker and caddy depend on it being healthy. Bound that wait well
+            # inside the SSH action's own limit: when the action times out it
+            # kills the session mid-command, so the diagnostics below never run
+            # and the failure arrives with no explanation at all.
+            if ! timeout 420 docker compose -f docker-compose.prod.yml up -d --remove-orphans; then
+              echo "=== Stack failed to start. Container states: ==="
+              docker compose -f docker-compose.prod.yml ps || true
+              echo "=== app ==="
+              docker compose -f docker-compose.prod.yml logs --tail 120 app || true
+              echo "=== db ==="
+              docker compose -f docker-compose.prod.yml logs --tail 40 db || true
+              echo "=== caddy ==="
+              docker compose -f docker-compose.prod.yml logs --tail 40 caddy || true
               docker logout ghcr.io
               exit 1
             fi
