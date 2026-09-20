@@ -13,6 +13,8 @@ AI-powered solar lead calling, qualification, follow-up and sales handoff in **T
 
 ## Documentation
 
+- **[docs/HANDOVER.md](docs/HANDOVER.md)** — current state, what is not built, deployment, provider switch-on, and suggested next steps. **Start here.**
+- **[CLAUDE.md](CLAUDE.md)** — architecture, module map, commands and the invariants this codebase holds to.
 - **[docs/MVP.md](docs/MVP.md)** — the complete MVP scope: users and roles, lead pipeline, telephony setup, AI voice architecture, per-service qualification workflows, scoring, dashboards, compliance, technical stack, repository structure, deployment architecture, sprint plan, test strategy and success criteria.
 
 ## Getting started (backend)
