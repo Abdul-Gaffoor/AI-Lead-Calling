@@ -69,19 +69,21 @@ jobs:
       - name: Apply each migration in its own process
         run: |
           set -e
-          # Sentinel, not an empty string: on a fresh database `alembic current`
-          # prints nothing, so an empty starting value matched on the first pass
-          # and this loop exited before applying anything — leaving the
-          # all-at-once `upgrade head` below as the only thing that ran, which
-          # is exactly the single-process case that hides a duplicate CREATE TYPE.
-          previous="none"
+          # Stop when the database reaches head, checked BEFORE trying to move.
+          # Comparing successive `alembic current` values instead only notices
+          # there is nothing left after `upgrade +1` has already failed at head
+          # — and on a fresh database `current` prints nothing, so an empty
+          # starting value matched immediately and the loop applied nothing at
+          # all, leaving the all-at-once `upgrade head` as the only thing that
+          # ran. That is exactly the single-process case this step exists to
+          # avoid, because it hides a duplicate CREATE TYPE.
+          target=$(alembic -c database/alembic.ini heads 2>/dev/null | head -1 | awk '{print $1}')
+          test -n "$target"
           for _ in $(seq 1 100); do
-            current=$(alembic -c database/alembic.ini current 2>/dev/null | tail -1)
-            [ "$current" = "$previous" ] && break
-            previous="$current"
+            current=$(alembic -c database/alembic.ini current 2>/dev/null | head -1 | awk '{print $1}')
+            [ "$current" = "$target" ] && break
             alembic -c database/alembic.ini upgrade +1
           done
-          alembic -c database/alembic.ini upgrade head
           alembic -c database/alembic.ini current
 
       - name: Downgrade and re-apply the latest migration
