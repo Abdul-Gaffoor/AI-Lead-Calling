@@ -84,6 +84,56 @@ def test_the_deploy_fails_when_https_does_not_answer():
     assert 'https://${SITE_ADDRESS}/health' in workflow
 
 
+def test_a_password_with_url_characters_still_connects(monkeypatch):
+    """A password is arbitrary text. Pasted straight into a DSN, an "@" makes
+    the rest of it look like a hostname, so the app quietly tries to reach the
+    wrong server and reports only that the database "did not become
+    available" — which is exactly how a deploy failed once.
+    """
+    from sqlalchemy.engine import make_url
+
+    from backend.core.config import Settings
+
+    # The test suite pins DATABASE_URL to SQLite; drop it so the parts are used.
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    awkward = "p@ss:w/rd#1 ?&%"
+    settings = Settings(_env_file=None, postgres_password=awkward)
+    url = make_url(settings.database_url)
+
+    assert url.host == "db", url
+    assert url.database == "swaraj_solar", url
+    assert url.username == "swaraj", url
+    assert url.password == awkward, "the password must survive encoding intact"
+
+
+def test_an_explicit_database_url_always_wins():
+    """Tests point at SQLite this way, so the parts must never override it."""
+    from backend.core.config import Settings
+
+    settings = Settings(_env_file=None, database_url="sqlite://", postgres_password="x")
+    assert settings.database_url == "sqlite://"
+
+
+def test_the_compose_file_does_not_hand_craft_a_dsn():
+    """The app assembles the URL so it can encode the password; a DSN built by
+    string interpolation in YAML cannot."""
+    raw = COMPOSE.read_text()
+
+    assert "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}" in raw
+    assert "DATABASE_URL: postgresql" not in raw, (
+        "compose is interpolating the password into a URL again"
+    )
+
+
+def test_the_entrypoint_reports_why_the_database_is_unreachable():
+    """Without the reason, a wrong password and a slow boot look identical."""
+    entrypoint = (DEPLOY_DIR / "entrypoint.sh").read_text()
+
+    assert "last_error" in entrypoint
+    assert "hide_password=True" in entrypoint, "never log the password"
+
+
 def test_recordings_outlive_a_redeploy():
     """Local recording storage inside a container is wiped on every deploy. The
     audio a manager is meant to review has to be on a volume, and the worker

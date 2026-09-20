@@ -16,14 +16,23 @@ from sqlalchemy import create_engine, text
 from backend.core.config import settings
 
 engine = create_engine(settings.database_url, pool_pre_ping=True)
+last_error = None
 for attempt in range(30):
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         sys.exit(0)
-    except Exception:
+    except Exception as exc:
+        last_error = exc
         time.sleep(2)
-print("Database did not become available in time", file=sys.stderr)
+
+# Say WHY. "Did not become available" alone cannot distinguish a database that
+# is still booting from a wrong password or an unreachable host, which turns a
+# two-minute fix into a guessing game. SQLAlchemy masks the password in a URL
+# repr and the driver's error text does not contain it, so this is safe to log.
+print("Database did not become available in time.", file=sys.stderr)
+print(f"  URL:   {engine.url.render_as_string(hide_password=True)}", file=sys.stderr)
+print(f"  Error: {type(last_error).__name__}: {last_error}", file=sys.stderr)
 sys.exit(1)
 PY
 

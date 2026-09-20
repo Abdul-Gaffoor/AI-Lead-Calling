@@ -1,3 +1,6 @@
+from urllib.parse import quote
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -5,7 +8,18 @@ class Settings(BaseSettings):
     """Application settings, loaded from environment variables / .env file."""
 
     app_name: str = "Swaraj Solar AI Sales Automation Platform"
+    #: Set this to point at a database directly. Otherwise it is assembled from
+    #: the POSTGRES_* parts below, which is what the deployed stack does.
     database_url: str = "postgresql+psycopg2://swaraj:swaraj@localhost:5432/swaraj_solar"
+
+    # Connection parts. Kept separate from DATABASE_URL because a password is
+    # arbitrary text: an "@", ":", "/" or "#" pasted into a URL silently
+    # re-points it at another host or database instead of failing loudly.
+    postgres_user: str = "swaraj"
+    postgres_password: str = ""
+    postgres_db: str = "swaraj_solar"
+    postgres_host: str = "db"
+    postgres_port: int = 5432
 
     # Auth
     jwt_secret: str = "change-me-in-production"
@@ -108,6 +122,26 @@ class Settings(BaseSettings):
     tts_cache_entries: int = 200
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @model_validator(mode="after")
+    def _assemble_database_url(self):
+        """Build DATABASE_URL from the parts, percent-encoding the password.
+
+        An explicit DATABASE_URL always wins — that is how tests point at
+        SQLite and how a developer points at their own database.
+        """
+        if "database_url" in self.model_fields_set or not self.postgres_password:
+            return self
+
+        # quote, not quote_plus: the latter encodes a space as "+", which a URL
+        # parser reads back as a literal plus sign rather than a space.
+        encode = lambda value: quote(value, safe="")  # noqa: E731
+        self.database_url = (
+            "postgresql+psycopg2://"
+            f"{encode(self.postgres_user)}:{encode(self.postgres_password)}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+        return self
 
 
 settings = Settings()
