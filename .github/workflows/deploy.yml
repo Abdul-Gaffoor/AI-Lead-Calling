@@ -3,8 +3,7 @@ name: CI & Deploy
 on:
   push:
     branches:
-      - main
-      - claude/jolly-feynman-javr2t
+      - master
   pull_request:
   workflow_dispatch:
 

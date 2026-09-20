@@ -47,7 +47,7 @@ The interactive API docs are at http://localhost:8000/docs. Run the test suite w
 
 ## Deployment
 
-Pushes to the deployment branches run the [CI & Deploy workflow](.github/workflows/deploy.yml): tests → Docker image build pushed to GHCR → SSH deploy to the server (compose stack with the API, Postgres and Redis; migrations run automatically on container start). Server credentials and app secrets are read from GitHub Actions secrets — see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the required secrets and one-time server setup.
+Pushes to `master` run the [CI & Deploy workflow](.github/workflows/deploy.yml): tests → Docker image build pushed to GHCR → SSH deploy to the server (compose stack with the API, Postgres and Redis; migrations run automatically on container start). Server credentials and app secrets are read from GitHub Actions secrets — see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the required secrets and one-time server setup.
 
 ### What works today
 

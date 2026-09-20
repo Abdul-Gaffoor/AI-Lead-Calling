@@ -1,6 +1,6 @@
 # Deployment
 
-Pushes to `main` (and the current development branch) run `.github/workflows/deploy.yml`, which:
+Pushes to `master` run `.github/workflows/deploy.yml`, which:
 
 1. **Tests** — runs the full pytest suite; nothing deploys if tests fail.
 2. **Builds** — builds the backend Docker image (migrations + API, see `Dockerfile`) and pushes it to GitHub Container Registry as `ghcr.io/<owner>/<repo>:<commit-sha>`.
