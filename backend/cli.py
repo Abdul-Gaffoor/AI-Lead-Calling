@@ -3,6 +3,7 @@
 Usage:
     python -m backend.cli create-admin --email admin@swarajsolar.com \
         --password <password> --name "Platform Admin"
+    python -m backend.cli load-knowledge
 """
 
 import argparse
@@ -34,6 +35,28 @@ def create_admin(email: str, password: str, name: str) -> None:
         print(f"Created SUPER_ADMIN user {email}")
 
 
+def load_knowledge() -> None:
+    """Load `knowledge/` into the database as unapproved documents.
+
+    Nothing becomes retrievable here: MVP section 18 only puts approved company
+    information in front of a customer, so each document still has to be
+    approved by a curator afterwards.
+    """
+    from backend.knowledge.loader import load_directory
+
+    Base.metadata.create_all(bind=engine)
+    with SessionLocal() as db:
+        result = load_directory(db)
+        db.commit()
+    print(
+        f"Read {result['files']} files: {result['created']} new, "
+        f"{result['updated']} updated, {result['failed']} failed."
+    )
+    if result["created"] or result["updated"]:
+        print("All documents are UNAPPROVED and will not be used on calls "
+              "until a curator approves them.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="backend.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -43,7 +66,12 @@ def main() -> None:
     admin.add_argument("--password", required=True)
     admin.add_argument("--name", default="Platform Admin")
 
+    sub.add_parser("load-knowledge", help="Load knowledge/ markdown into the database")
+
     args = parser.parse_args()
+    if args.command == "load-knowledge":
+        load_knowledge()
+        return
     if args.command == "create-admin":
         if len(args.password) < 8:
             print("Password must be at least 8 characters", file=sys.stderr)

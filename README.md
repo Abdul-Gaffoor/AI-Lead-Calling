@@ -92,10 +92,9 @@ Architecture: **modular monolith + workers** for the MVP.
 - ✅ **Sprints 4–5** — qualification field sets for all ten services, driving the AI's questions and the scoring rules
 - ✅ **Sprint 6** — lead scoring with configurable weights, AI summaries, executive assignment, callbacks, site-survey module
 - ✅ **Sprint 7** — manager dashboard, funnel reporting, call metrics, transcripts
-- 🟡 **Sprint 8** — website lead API, central ROI engine and TLS/HTTPS done; **remaining: RAG knowledge base, recording storage, production pilot**
+- 🟡 **Sprint 8** — website lead API, central ROI engine, TLS/HTTPS and the RAG knowledge base done; **remaining: recording storage, production pilot**
 
 ### Not yet built
 
-- **RAG knowledge base** (MVP section 18) — the AI answers from its prompt, not yet from curated Swaraj content.
 - **Recording storage and quality review UI** (MVP section 29) — transcripts are stored; recordings need object storage.
 - **Live media streaming** — the conversation API is turn-based; real-time SIP media streaming is wired when the telephony account exists.

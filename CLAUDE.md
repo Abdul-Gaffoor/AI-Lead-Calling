@@ -39,16 +39,18 @@ Daily CSV/XLSX + website API
 `ai` conversation orchestrator & providers · `scoring` configurable lead scoring ·
 `solar_engine` approved sizing/ROI maths · `surveys` site visits ·
 `sales` opportunities & assignment · `reports` dashboard & funnel ·
-`compliance` suppression list & audit log · `telephony` provider abstraction
+`compliance` suppression list & audit log · `telephony` provider abstraction ·
+`knowledge` curated content, embeddings & retrieval
 
 ## Commands
 
 ```bash
-.venv/bin/python -m pytest -q                              # 113 tests
+.venv/bin/python -m pytest -q                              # 141 tests
 .venv/bin/uvicorn backend.main:app --reload                # API + console at /
 .venv/bin/alembic -c database/alembic.ini upgrade head     # migrations
 .venv/bin/celery -A workers.celery_app worker --beat       # dispatcher (needs Redis)
 .venv/bin/python -m backend.cli create-admin --email x@y.com --password ... --name "..."
+.venv/bin/python -m backend.cli load-knowledge             # knowledge/ -> database
 ```
 
 ## Rules this codebase holds to
@@ -74,9 +76,21 @@ These are product requirements, not style preferences. Breaking them is a bug.
 7. **Engineering constants need sign-off.** `backend/solar_engine/constants.py`
    values, especially subsidy slabs, are documented placeholders until Swaraj
    engineering approves them.
+8. **Only approved knowledge reaches a customer.** Documents in
+   `backend/knowledge/` are retrieved on a call only once a person has approved
+   them, and editing one withdraws that approval. The content in `knowledge/`
+   is drafted from the MVP document, not Swaraj's own material, so it ships
+   unapproved. It also contains no figures, deliberately: rule 1 puts every
+   number in the solar engine, and content the model reads aloud would
+   otherwise be a way around that. A test enforces both.
 
 ## Testing
 
 Tests run against SQLite for speed; **CI also runs the whole suite against real
 PostgreSQL** and applies each migration in a separate process, because a
 SQLite-only run hid a migration bug that took production down once.
+
+Two code paths differ by database and are only both covered because of that:
+the knowledge search ranks with pgvector's `<=>` on PostgreSQL and in Python on
+SQLite. The same assertions run against each, so a difference between them
+fails CI rather than production.

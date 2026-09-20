@@ -29,6 +29,7 @@ from backend.calls.models import CallAttempt, Disposition
 from backend.calls.service import record_disposition, utcnow
 from backend.core.config import settings
 from backend.customers.models import Customer
+from backend.knowledge import service as knowledge
 from backend.sales.service import create_from_call
 from backend.scoring.service import score_lead
 from backend.leads.models import Lead
@@ -202,7 +203,7 @@ def handle_turn(
 
 def _decide(db: Session, conversation: Conversation, text: str) -> TurnDecision:
     """Ask the LLM what to say next, falling back safely if it cannot answer."""
-    messages = [{"role": "user", "content": _context_block(db, conversation)}]
+    messages = [{"role": "user", "content": _context_block(db, conversation, text)}]
     for turn in conversation.turns:
         messages.append(
             {
@@ -223,7 +224,35 @@ def _decide(db: Session, conversation: Conversation, text: str) -> TurnDecision:
         )
 
 
-def _context_block(db: Session, conversation: Conversation) -> str:
+def _knowledge_block(db: Session, conversation: Conversation, question: str) -> list[str]:
+    """Approved Swaraj content relevant to what the customer just asked.
+
+    Retrieval must never be able to fail a call: if the embedding provider is
+    unreachable the AI simply answers without company content, which its rules
+    already cover by offering to have the team confirm.
+    """
+    try:
+        passages = knowledge.search(db, question, service=conversation.service)
+    except Exception as exc:
+        logger.warning("Knowledge lookup failed for conversation %s: %s", conversation.id, exc)
+        return []
+
+    if not passages:
+        return []
+
+    lines = [
+        "\n## Approved Swaraj information for this question",
+        "Answer from these passages only. They are the company's approved "
+        "wording. If they do not cover what was asked, say the team will "
+        "confirm — do not fill the gap yourself. Any number still comes from "
+        "the engineer, never from this text or from you.",
+    ]
+    for passage in passages:
+        lines.append(f"\n### {passage.title}\n{passage.text}")
+    return lines
+
+
+def _context_block(db: Session, conversation: Conversation, question: str = "") -> str:
     """What the AI already knows, so it never re-asks (MVP section 12)."""
     customer = db.get(Customer, conversation.customer_id)
     lead = db.get(Lead, conversation.lead_id) if conversation.lead_id else None
@@ -253,6 +282,9 @@ def _context_block(db: Session, conversation: Conversation) -> str:
     if remaining:
         lines.append("\n## Still needed")
         lines.append(", ".join(remaining))
+
+    if question:
+        lines.extend(_knowledge_block(db, conversation, question))
 
     lines.append("\nContinue the call. Reply with your next spoken line.")
     return "\n".join(lines)

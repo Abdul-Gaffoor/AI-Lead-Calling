@@ -117,6 +117,47 @@ docker compose -f docker-compose.prod.yml up -d
 
 Postgres data lives in the `pgdata` Docker volume and survives redeploys. Database backups (per the MVP security checklist) should be scheduled on the server, e.g. a cron job running `pg_dump` inside the `db` container.
 
+### Knowledge base (MVP section 18)
+
+The `db` container is now **`pgvector/pgvector:pg16`** rather than
+`postgres:16-alpine` — the same PostgreSQL 16 with the `vector` extension the
+knowledge base migration creates.
+
+> ⚠️ **Upgrading a server that already has data.** This swaps the image's base
+> OS (Alpine/musl → Debian/glibc). The data directory format is unchanged, so
+> the database starts, but glibc and musl sort text differently and indexes on
+> text columns were built under the old ordering. On a server with real data,
+> `pg_dump` before the deploy and restore into the new container, or run
+> `REINDEX DATABASE swaraj_solar` afterwards. A server that has only ever held
+> test data can just take the new image.
+
+Load the curated content in `knowledge/` and check what landed:
+
+```bash
+docker compose -f docker-compose.prod.yml exec app \
+  python -m backend.cli load-knowledge
+```
+
+Everything loads **unapproved**, and unapproved documents are never retrieved
+on a call. A Super Admin or Sales Manager approves each one
+(`POST /knowledge/documents/{slug}/approve`) after reading it. Editing an
+approved document withdraws that approval. The shipped content is drafted from
+`docs/MVP.md`, **not** from Swaraj's own approved material, so it needs review
+line by line before any of it is approved.
+
+Embeddings default to a mock (a hashed bag-of-words: offline, free, and about
+as good as keyword search). For real semantic retrieval:
+
+| Name | Kind | Purpose |
+|------|------|---------|
+| `EMBEDDING_PROVIDER` | variable | `voyage` to use real embeddings |
+| `VOYAGE_API_KEY` | secret | Voyage AI key |
+| `EMBEDDING_MODEL` | variable | Defaults to `voyage-3` (multilingual, covers Telugu) |
+
+After switching provider, run `POST /knowledge/reindex` — vectors from two
+models are not comparable, so search ignores chunks embedded by any model but
+the active one, and retrieval returns nothing until they are rebuilt.
+
 ### AI provider configuration (optional until accounts exist)
 
 The deployed stack defaults to `mock` for all three AI providers: conversations run end to end, no network calls are made and nothing is billed. To switch on the real pipeline, add these and redeploy:

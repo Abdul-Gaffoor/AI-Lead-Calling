@@ -57,6 +57,21 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 1024
     llm_timeout_seconds: float = 12.0
 
+    # ---- Knowledge base / RAG (MVP section 18) ----
+    #: "mock" is a hashed bag-of-words: offline, free, keyword-quality
+    #: retrieval. "voyage" is a real multilingual embedding model.
+    embedding_provider: str = "mock"  # mock | voyage
+    voyage_api_key: str = ""
+    embedding_model: str = "voyage-3"
+    embedding_timeout_seconds: float = 20.0
+    #: How many passages to put in front of the LLM for one question. Small on
+    #: purpose: a voice reply is one or two sentences, and every extra passage
+    #: is latency on a live call.
+    knowledge_top_k: int = 3
+    #: Below this cosine similarity a passage is treated as irrelevant. Better
+    #: to tell the customer we will confirm than to answer from a poor match.
+    knowledge_min_similarity: float = 0.25
+
     # ElevenLabs
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = ""

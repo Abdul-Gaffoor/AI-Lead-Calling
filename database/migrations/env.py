@@ -23,6 +23,7 @@ from backend.compliance import models as compliance_models  # noqa: F401
 from backend.sales import models as sales_models  # noqa: F401
 from backend.scoring import models as scoring_models  # noqa: F401
 from backend.surveys import models as survey_models  # noqa: F401
+from backend.knowledge import models as knowledge_models  # noqa: F401
 from backend.customers import models as customer_models  # noqa: F401
 from backend.leads import models as lead_models  # noqa: F401
 

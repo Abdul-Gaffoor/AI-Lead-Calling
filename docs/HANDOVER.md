@@ -1,7 +1,7 @@
 # Handover — state of the platform
 
-Last updated: 2026-09-20 · 11 commits · 113 tests passing on SQLite and PostgreSQL
-· 47 API endpoints · 4 migrations
+Last updated: 2026-09-20 · 141 tests passing on SQLite and PostgreSQL
+· 5 migrations
 
 ---
 
@@ -51,6 +51,13 @@ Everything below is implemented, tested and deployed.
 - **Sales portal** — opportunities auto-assigned to the least-loaded executive,
   priority queue ordered by tier then score, notes and stage tracking.
 - **Manager dashboard and funnel** with conversion rates and call metrics.
+- **Knowledge base / RAG** (MVP §18) — curated Swaraj content in the same
+  PostgreSQL via pgvector, retrieved per question and put in front of the LLM
+  with an instruction to answer from it and nothing else. `EmbeddingProvider`
+  follows the other provider interfaces: the default mock is a hashed
+  bag-of-words, so retrieval works offline and costs nothing, at roughly
+  keyword quality. **Nothing is retrieved until a person approves it**, and
+  editing an approved document withdraws that approval.
 - **Website lead API** and public ROI calculator, running the same suppression checks.
 - **Operations console** at `/` — sign-in, upload, campaigns, executive queue,
   surveys, calculator. Light and dark, verified down to 360px in a real browser
@@ -63,7 +70,6 @@ Everything below is implemented, tested and deployed.
 
 | Gap | Why it matters |
 |---|---|
-| **RAG knowledge base** (MVP §18) | The AI answers from its prompt, not curated Swaraj content. Plan: pgvector in the existing database, not a second datastore. |
 | **Recording storage + quality review UI** (MVP §29) | Transcripts are stored; recordings need object storage. |
 | **Real-time SIP media streaming** | The conversation API is turn-based. Wire it when the telephony account exists. |
 
@@ -128,9 +134,19 @@ Before going live:
   light and dark, and the tier word always accompanies the dot.
 - **Scoring replaced a Sprint 3 placeholder.** Qualified calls once returned a fixed
   `QUALIFIED_WARM`; the score now chooses the disposition.
-- **Postgres, not a vector database, is the primary store.** When RAG arrives, use
-  pgvector in the same database rather than adding LanceDB — one system to run,
-  back up and secure, and embeddings can be joined to lead data.
+- **Postgres, not a vector database, is the primary store.** RAG uses pgvector in
+  the same database rather than a second datastore — one system to run, back up
+  and secure, and embeddings can be joined to lead data. The `db` image is now
+  `pgvector/pgvector:pg16`; see `docs/DEPLOYMENT.md` before taking that image
+  onto a server that already holds data.
+- **The knowledge base ships switched off, and holds no numbers.** Approval is a
+  person vouching for specific words, so editing a document withdraws it. And
+  no figure appears in the curated content: the solar engine owns every number,
+  and content the model reads aloud would otherwise be a way around that rule.
+- **Vectors are only compared within one embedding model.** Chunks record the
+  model that produced them and search filters on the active one, so switching
+  provider degrades to "no knowledge" — which the AI handles — rather than to
+  confident nonsense from an incomparable vector space.
 
 ### Two production incidents, and the guardrails added
 
@@ -141,6 +157,14 @@ Before going live:
    PostgreSQL and exercises downgrade/re-apply.
 2. **A shipped CSS fix appeared not to work** because browsers served the cached
    stylesheet. *Guardrail:* asset fingerprinting plus `no-store` on the page.
+3. **The guardrail from incident 1 was not running.** CI's "apply each migration
+   in its own process" loop started from an empty string and compared it to
+   `alembic current`, which prints nothing on a fresh database — so it matched
+   on the first pass and exited before applying anything, leaving the
+   all-at-once `upgrade head` as the only thing that ran. That is precisely the
+   single-process case that hides a duplicate `CREATE TYPE`. Fixed by starting
+   from a sentinel; verified against a real PostgreSQL, where all five
+   revisions now apply one per process.
 
 Both had the same root cause in my process — testing something in an environment
 that differed from production in exactly the way that mattered.
@@ -149,9 +173,16 @@ that differed from production in exactly the way that mattered.
 
 ## 6. Suggested next steps, in order
 
-1. **Telugu voice evaluation** as soon as an ElevenLabs key exists; it may change
+1. **Review and approve the knowledge base.** `knowledge/` is drafted from
+   `docs/MVP.md`, not from Swaraj's own material, and until somebody reads each
+   document and approves it the AI has no company content at all. This is the
+   cheapest large improvement to answer quality available.
+2. **Telugu voice evaluation** as soon as an ElevenLabs key exists; it may change
    the provider choice, so do it before tuning conversations around it.
-2. **RAG knowledge base** with pgvector.
 3. **Recording storage** and the quality-review UI.
 4. **Point a domain at the server** and set `DOMAIN` / `ACME_EMAIL`, so TLS uses a
    publicly trusted certificate instead of the internal fallback.
+5. **Real embeddings** (`EMBEDDING_PROVIDER=voyage`) once there is a key. The
+   mock cannot match meaning across different words, so "how much do I save"
+   will not find a passage about payback. Run `POST /knowledge/reindex` after
+   switching.

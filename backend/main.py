@@ -19,6 +19,7 @@ from backend.compliance import models as compliance_models  # noqa: F401
 from backend.sales import models as sales_models  # noqa: F401
 from backend.scoring import models as scoring_models  # noqa: F401
 from backend.surveys import models as survey_models  # noqa: F401
+from backend.knowledge import models as knowledge_models  # noqa: F401
 from backend.customers import models as customer_models  # noqa: F401
 from backend.leads import models as lead_models  # noqa: F401
 
@@ -28,6 +29,7 @@ from backend.calls.router import router as calls_router
 from backend.campaigns.router import router as campaigns_router
 from backend.compliance.router import router as compliance_router
 from backend.customers.router import router as customers_router
+from backend.knowledge.router import router as knowledge_router
 from backend.leads.public_router import router as public_router
 from backend.leads.router import router as leads_router
 from backend.reports.router import router as reports_router
@@ -55,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(ai_router)
     app.include_router(customers_router)
     app.include_router(compliance_router)
+    app.include_router(knowledge_router)
     app.include_router(scoring_router)
     app.include_router(solar_router)
     app.include_router(surveys_router)

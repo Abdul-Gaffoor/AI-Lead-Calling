@@ -36,7 +36,9 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector build of the same PostgreSQL 16: the knowledge base
+        # migration creates the `vector` extension.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: swaraj
           POSTGRES_PASSWORD: swaraj
@@ -68,7 +70,12 @@ jobs:
       - name: Apply each migration in its own process
         run: |
           set -e
-          previous=""
+          # Sentinel, not an empty string: on a fresh database `alembic current`
+          # prints nothing, so an empty starting value matched on the first pass
+          # and this loop exited before applying anything — leaving the
+          # all-at-once `upgrade head` below as the only thing that ran, which
+          # is exactly the single-process case that hides a duplicate CREATE TYPE.
+          previous="none"
           for _ in $(seq 1 100); do
             current=$(alembic -c database/alembic.ini current 2>/dev/null | tail -1)
             [ "$current" = "$previous" ] && break
@@ -171,6 +178,9 @@ jobs:
           EXOTEL_SUBDOMAIN: ${{ vars.EXOTEL_SUBDOMAIN || 'api.exotel.com' }}
           EXOTEL_FLOW_APP_ID: ${{ vars.EXOTEL_FLOW_APP_ID }}
           # AI voice pipeline — optional; defaults to mocks (no spend)
+          EMBEDDING_PROVIDER: ${{ vars.EMBEDDING_PROVIDER || 'mock' }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+          EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL || 'voyage-3' }}
           SPEECH_PROVIDER: ${{ vars.SPEECH_PROVIDER || 'mock' }}
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'mock' }}
           VOICE_PROVIDER: ${{ vars.VOICE_PROVIDER || 'mock' }}
@@ -185,7 +195,7 @@ jobs:
           username: ${{ secrets.SERVER_USER || vars.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY || vars.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || vars.SERVER_PORT || 22 }}
-          envs: APP_IMAGE,GHCR_USER,GHCR_TOKEN,JWT_SECRET,POSTGRES_PASSWORD,DOMAIN,ACME_EMAIL,SERVER_HOST,TELEPHONY_PROVIDER,PUBLIC_BASE_URL,TELEPHONY_WEBHOOK_TOKEN,EXOTEL_SID,EXOTEL_API_KEY,EXOTEL_API_TOKEN,EXOTEL_CALLER_ID,EXOTEL_SUBDOMAIN,EXOTEL_FLOW_APP_ID,SPEECH_PROVIDER,LLM_PROVIDER,VOICE_PROVIDER,ANTHROPIC_API_KEY,LLM_MODEL,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,ELEVENLABS_MODEL_ID,ELEVENLABS_OUTPUT_FORMAT
+          envs: APP_IMAGE,GHCR_USER,GHCR_TOKEN,JWT_SECRET,POSTGRES_PASSWORD,DOMAIN,ACME_EMAIL,SERVER_HOST,TELEPHONY_PROVIDER,PUBLIC_BASE_URL,TELEPHONY_WEBHOOK_TOKEN,EXOTEL_SID,EXOTEL_API_KEY,EXOTEL_API_TOKEN,EXOTEL_CALLER_ID,EXOTEL_SUBDOMAIN,EXOTEL_FLOW_APP_ID,EMBEDDING_PROVIDER,VOYAGE_API_KEY,EMBEDDING_MODEL,SPEECH_PROVIDER,LLM_PROVIDER,VOICE_PROVIDER,ANTHROPIC_API_KEY,LLM_MODEL,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,ELEVENLABS_MODEL_ID,ELEVENLABS_OUTPUT_FORMAT
           script: |
             set -e
             cd /opt/swaraj-solar
@@ -221,6 +231,9 @@ jobs:
             EXOTEL_CALLER_ID=${EXOTEL_CALLER_ID}
             EXOTEL_SUBDOMAIN=${EXOTEL_SUBDOMAIN}
             EXOTEL_FLOW_APP_ID=${EXOTEL_FLOW_APP_ID}
+            EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER}
+            VOYAGE_API_KEY=${VOYAGE_API_KEY}
+            EMBEDDING_MODEL=${EMBEDDING_MODEL}
             SPEECH_PROVIDER=${SPEECH_PROVIDER}
             LLM_PROVIDER=${LLM_PROVIDER}
             VOICE_PROVIDER=${VOICE_PROVIDER}
