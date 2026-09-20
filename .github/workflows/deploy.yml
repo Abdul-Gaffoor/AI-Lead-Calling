@@ -151,7 +151,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY || vars.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || vars.SERVER_PORT || 22 }}
           source: deploy/docker-compose.prod.yml,deploy/Caddyfile
-          target: /opt/swaraj-solar
+          target: ${{ vars.DEPLOY_DIR || '/opt/swaraj-solar' }}
           strip_components: 1
 
       - name: Deploy stack
@@ -168,6 +168,10 @@ jobs:
           DOMAIN: ${{ vars.DOMAIN }}
           ACME_EMAIL: ${{ vars.ACME_EMAIL }}
           SERVER_HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
+          # Where the stack lives on the server. Defaults to /opt, which
+          # needs root to create; point it inside the deploy user's home
+          # (e.g. /home/deploy/swaraj-solar) for an unprivileged deploy.
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/swaraj-solar' }}
           # Telephony — optional; defaults to the mock provider (no real calls)
           TELEPHONY_PROVIDER: ${{ vars.TELEPHONY_PROVIDER || 'mock' }}
           PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
@@ -204,10 +208,10 @@ jobs:
           username: ${{ secrets.SERVER_USER || vars.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY || vars.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || vars.SERVER_PORT || 22 }}
-          envs: APP_IMAGE,GHCR_USER,GHCR_TOKEN,JWT_SECRET,POSTGRES_PASSWORD,DOMAIN,ACME_EMAIL,SERVER_HOST,TELEPHONY_PROVIDER,PUBLIC_BASE_URL,TELEPHONY_WEBHOOK_TOKEN,EXOTEL_SID,EXOTEL_API_KEY,EXOTEL_API_TOKEN,EXOTEL_CALLER_ID,EXOTEL_SUBDOMAIN,EXOTEL_FLOW_APP_ID,STORAGE_PROVIDER,S3_BUCKET,S3_ENDPOINT_URL,S3_REGION,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,FETCH_PROVIDER_RECORDINGS,RECORDING_RETENTION_DAYS,EMBEDDING_PROVIDER,VOYAGE_API_KEY,EMBEDDING_MODEL,SPEECH_PROVIDER,LLM_PROVIDER,VOICE_PROVIDER,ANTHROPIC_API_KEY,LLM_MODEL,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,ELEVENLABS_MODEL_ID,ELEVENLABS_OUTPUT_FORMAT
+          envs: APP_IMAGE,GHCR_USER,GHCR_TOKEN,JWT_SECRET,POSTGRES_PASSWORD,DOMAIN,ACME_EMAIL,SERVER_HOST,DEPLOY_DIR,TELEPHONY_PROVIDER,PUBLIC_BASE_URL,TELEPHONY_WEBHOOK_TOKEN,EXOTEL_SID,EXOTEL_API_KEY,EXOTEL_API_TOKEN,EXOTEL_CALLER_ID,EXOTEL_SUBDOMAIN,EXOTEL_FLOW_APP_ID,STORAGE_PROVIDER,S3_BUCKET,S3_ENDPOINT_URL,S3_REGION,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,FETCH_PROVIDER_RECORDINGS,RECORDING_RETENTION_DAYS,EMBEDDING_PROVIDER,VOYAGE_API_KEY,EMBEDDING_MODEL,SPEECH_PROVIDER,LLM_PROVIDER,VOICE_PROVIDER,ANTHROPIC_API_KEY,LLM_MODEL,ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID,ELEVENLABS_MODEL_ID,ELEVENLABS_OUTPUT_FORMAT
           script: |
             set -e
-            cd /opt/swaraj-solar
+            cd "${DEPLOY_DIR}"
 
             # A domain gets a publicly trusted certificate; with none configured
             # fall back to the server's own host/IP and Caddy's internal CA, so

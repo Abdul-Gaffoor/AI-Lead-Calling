@@ -4,7 +4,7 @@ Pushes to `master` run `.github/workflows/deploy.yml`, which:
 
 1. **Tests** — runs the full pytest suite; nothing deploys if tests fail.
 2. **Builds** — builds the backend Docker image (migrations + API, see `Dockerfile`) and pushes it to GitHub Container Registry as `ghcr.io/<owner>/<repo>:<commit-sha>`.
-3. **Deploys** — copies `deploy/docker-compose.prod.yml` and `deploy/Caddyfile` to `/opt/swaraj-solar` on the server over SSH, writes the `.env` file from secrets, pulls the new image, restarts the stack, and waits for `/health` to pass **over HTTPS**. On container start the app waits for Postgres, applies Alembic migrations, then serves the API on port 8000 — bound to loopback, because everything from outside the server arrives through the TLS terminator.
+3. **Deploys** — copies `deploy/docker-compose.prod.yml` and `deploy/Caddyfile` to the deploy directory on the server over SSH, writes the `.env` file from secrets, pulls the new image, restarts the stack, and waits for `/health` to pass **over HTTPS**. On container start the app waits for Postgres, applies Alembic migrations, then serves the API on port 8000 — bound to loopback, because everything from outside the server arrives through the TLS terminator.
 
 The workflow can also be run manually from the Actions tab (workflow_dispatch). Pull requests only run the test job.
 
@@ -22,6 +22,7 @@ The deploy job targets the GitHub environment named **`Test`** (Settings → Env
 | `POSTGRES_PASSWORD` | Password for the production Postgres database |
 | `DOMAIN` | Domain pointed at the server, e.g. `swaraj.example.com` — optional, see TLS below |
 | `ACME_EMAIL` | Contact address for the Let's Encrypt account — optional, used with `DOMAIN` |
+| `DEPLOY_DIR` | Where the stack lives on the server — optional, defaults to `/opt/swaraj-solar` |
 
 > ⚠️ Prefer **secrets** for `SERVER_SSH_KEY`, `JWT_SECRET` and `POSTGRES_PASSWORD`: environment *variables* display their values in plain text to anyone with access to repo settings and are not masked in workflow logs; secrets are encrypted and masked.
 
@@ -70,7 +71,12 @@ Before switching to `exotel`, confirm the exact API endpoints, request fields an
 
 - Docker Engine with the Compose plugin installed (`docker compose version` works).
 - The SSH user can run Docker (member of the `docker` group, or root).
-- The SSH user can write to `/opt/swaraj-solar` (`sudo mkdir -p /opt/swaraj-solar && sudo chown <user> /opt/swaraj-solar`).
+- The SSH user can write to the deploy directory. Two ways:
+  - **Unprivileged (no root needed).** Set the `DEPLOY_DIR` Actions *variable* to a
+    path inside the user's home, e.g. `/home/deploy/swaraj-solar`. The deploy
+    creates it; the SSH user never needs `sudo`.
+  - **Default.** Leave `DEPLOY_DIR` unset and create `/opt/swaraj-solar` as root
+    once: `sudo mkdir -p /opt/swaraj-solar && sudo chown <user> /opt/swaraj-solar`.
 - Ports **80 and 443** reachable from the internet (80 for the HTTPS redirect and
   certificate renewal, 443 for traffic). Port 8000 should **not** be open — the
   API is only published on loopback.
@@ -81,7 +87,7 @@ After the first successful run, create the initial super-admin on the server:
 
 ```bash
 ssh <user>@<server>
-cd /opt/swaraj-solar
+cd <deploy directory>   # /opt/swaraj-solar, or your DEPLOY_DIR
 docker compose -f docker-compose.prod.yml exec app \
   python -m backend.cli create-admin \
   --email admin@swarajsolar.com --password '<strong password>' --name "Platform Admin"
@@ -99,7 +105,7 @@ and open `https://<domain-or-server>/` for the console, `/docs` for the API.
 ## Operations
 
 ```bash
-cd /opt/swaraj-solar
+cd <deploy directory>   # /opt/swaraj-solar, or your DEPLOY_DIR
 
 # Status / logs
 docker compose -f docker-compose.prod.yml ps
