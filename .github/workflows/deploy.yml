@@ -277,9 +277,14 @@ jobs:
             if [ -n "$(docker compose -f docker-compose.prod.yml ps -q db 2>/dev/null)" ]; then
               auth_ok=""
               for _ in $(seq 1 5); do
+                # -h db, not 127.0.0.1. The postgres image's pg_hba trusts
+                # loopback, so a check over 127.0.0.1 passes with any password
+                # at all and proves nothing. The service name resolves to the
+                # container's network address, which falls through to the
+                # scram-sha-256 rule the app itself hits.
                 if docker compose -f docker-compose.prod.yml exec -T \
                      -e PGPASSWORD="${POSTGRES_PASSWORD}" db \
-                     psql -h 127.0.0.1 -U swaraj -d swaraj_solar -c 'select 1' >/dev/null 2>&1; then
+                     psql -h db -U swaraj -d swaraj_solar -c 'select 1' >/dev/null 2>&1; then
                   auth_ok="yes"
                   break
                 fi
