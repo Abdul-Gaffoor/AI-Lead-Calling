@@ -61,9 +61,34 @@ The deployed stack defaults to `TELEPHONY_PROVIDER=mock`, which places **no real
 | `PUBLIC_BASE_URL` | variable | Public HTTPS URL of this API, so the provider can reach the status webhook |
 | `TELEPHONY_WEBHOOK_TOKEN` | secret | Shared token required on `/calls/webhooks/*` |
 | `EXOTEL_SID` / `EXOTEL_API_KEY` / `EXOTEL_API_TOKEN` | secrets | Exotel account credentials |
-| `EXOTEL_CALLER_ID` | variable | The approved business number to show as caller ID |
+| `EXOTEL_CALLER_ID` | variable | The approved ExoPhone to show as caller ID |
 | `EXOTEL_SUBDOMAIN` | variable | Defaults to `api.exotel.com` |
-| `EXOTEL_FLOW_APP_ID` | variable | Call flow/applet that connects the answered call to the AI agent |
+| `EXOTEL_FLOW_APP_ID` | variable | **Required.** The call flow/applet that connects the answered call to the AI agent — without it a call has no destination, and the app refuses to start the provider rather than having Exotel reject every lead |
+| `EXOTEL_STATUS_CALLBACK_EVENTS` | variable | Defaults to `terminal` |
+| `EXOTEL_MAX_RETRIES` | variable | Transient failures retried before an attempt is burned; defaults to 2 |
+| `STUCK_CALL_TIMEOUT_MINUTES` | variable | A call with no status callback after this long is failed out so its concurrency slot returns to the campaign; defaults to 30, `0` disables |
+
+**`PUBLIC_BASE_URL` matters more than it looks.** It is how Exotel reaches the
+status webhook, and the completion callback is what ends a call, records its
+outcome and frees a concurrency slot. Get it wrong and every call runs to the
+stuck-call timeout: the campaign still works, but at a small fraction of its
+concurrency. Set it to the `https://` URL Exotel can actually reach, and set
+`TELEPHONY_WEBHOOK_TOKEN` so the endpoint is not open to the world.
+
+Before the first real campaign, confirm against your own Exotel account:
+
+- The **endpoint and parameters**. `backend/telephony/exotel.py` follows the
+  published `Calls/connect.json` contract, but Exotel provisions different
+  products and the details vary. A single test call will tell you.
+- The **callback field names**. The provider accepts the common aliases
+  (`Status`/`CallStatus`, `CallSid`/`Sid`, `DialCallDuration`/`Duration`), and
+  logs a warning naming any status value it does not recognise — check the
+  logs after the first few calls.
+- **Live transfer.** Not implemented: it is configured on the Exotel call flow,
+  and the mechanism differs by product. Human transfer currently falls back to
+  a priority callback.
+- The **caller ID and number series** against current TRAI rules for
+  commercial calling.
 
 Before switching to `exotel`, confirm the exact API endpoints, request fields and callback field names against the account's own documentation — `backend/telephony/exotel.py` follows the published shape but the contract varies by provisioned product. Also confirm the caller-ID/number series against current TRAI requirements for commercial calling.
 

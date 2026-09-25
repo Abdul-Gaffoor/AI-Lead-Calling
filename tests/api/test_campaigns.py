@@ -387,3 +387,98 @@ def test_dispatch_blocked_outside_calling_window(client, admin_headers, operator
         ]
         == 0
     )
+
+
+# --- lost status callbacks (MVP section 7) ----------------------------------
+
+
+def test_a_lost_status_callback_stalls_the_campaign_until_it_is_reclaimed(
+    client, admin_headers, operator_headers
+):
+    """A call only leaves an active state when the provider says so. If that
+    callback never arrives the attempt holds its concurrency slot, and at a
+    concurrency of two, two lost callbacks stop the campaign dialling for good.
+    """
+    from backend.campaigns.dispatcher import reclaim_stuck_calls
+
+    upload_id = upload_leads(
+        client,
+        operator_headers,
+        [("A", "9876543210"), ("B", "9444444444"), ("C", "9555555555")],
+    )
+    campaign_id = make_campaign(client, admin_headers, concurrency=2)["id"]
+    client.post(
+        f"/campaigns/{campaign_id}/leads", headers=admin_headers, json={"upload_id": upload_id}
+    )
+    client.post(f"/campaigns/{campaign_id}/start", headers=admin_headers)
+
+    assert client.post(
+        f"/campaigns/{campaign_id}/dispatch", headers=admin_headers
+    ).json()["calls_placed"] == 2
+
+    # Both slots are held and no callback is coming. The campaign is stuck.
+    assert client.post(
+        f"/campaigns/{campaign_id}/dispatch", headers=admin_headers
+    ).json()["calls_placed"] == 0
+
+    # Age the two in-flight calls past the timeout.
+    with SessionLocal() as db:
+        stale = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=2)
+        for attempt in db.query(CallAttempt).all():
+            attempt.started_at = stale
+        db.commit()
+
+    # The next tick reclaims them and dials the third lead.
+    placed = client.post(
+        f"/campaigns/{campaign_id}/dispatch", headers=admin_headers
+    ).json()["calls_placed"]
+    assert placed >= 1, "the campaign should dial again once the slots are freed"
+
+    with SessionLocal() as db:
+        reclaimed = db.query(CallAttempt).filter(
+            CallAttempt.disposition == Disposition.TELEPHONY_ERROR
+        ).all()
+        assert len(reclaimed) == 2
+        assert all("No status callback" in a.summary for a in reclaimed)
+
+
+def test_a_call_still_within_the_timeout_keeps_its_slot(client, admin_headers,
+                                                        operator_headers):
+    """The sweep must not cut off calls that are simply still ringing."""
+    from backend.campaigns.dispatcher import reclaim_stuck_calls
+
+    upload_id = upload_leads(client, operator_headers, [("A", "9876543210")])
+    campaign_id = make_campaign(client, admin_headers, concurrency=2)["id"]
+    client.post(
+        f"/campaigns/{campaign_id}/leads", headers=admin_headers, json={"upload_id": upload_id}
+    )
+    client.post(f"/campaigns/{campaign_id}/start", headers=admin_headers)
+    client.post(f"/campaigns/{campaign_id}/dispatch", headers=admin_headers)
+
+    with SessionLocal() as db:
+        assert reclaim_stuck_calls(db) == 0
+        db.commit()
+
+    calls = client.get(f"/calls?campaign_id={campaign_id}", headers=admin_headers).json()
+    assert calls[0]["state"] == "QUEUED"
+
+
+def test_the_sweep_can_be_switched_off(client, admin_headers, operator_headers, monkeypatch):
+    from backend.campaigns.dispatcher import reclaim_stuck_calls
+
+    monkeypatch.setattr("backend.core.config.settings.stuck_call_timeout_minutes", 0)
+
+    upload_id = upload_leads(client, operator_headers, [("A", "9876543210")])
+    campaign_id = make_campaign(client, admin_headers, concurrency=2)["id"]
+    client.post(
+        f"/campaigns/{campaign_id}/leads", headers=admin_headers, json={"upload_id": upload_id}
+    )
+    client.post(f"/campaigns/{campaign_id}/start", headers=admin_headers)
+    client.post(f"/campaigns/{campaign_id}/dispatch", headers=admin_headers)
+
+    with SessionLocal() as db:
+        stale = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)
+        for attempt in db.query(CallAttempt).all():
+            attempt.started_at = stale
+        db.commit()
+        assert reclaim_stuck_calls(db) == 0

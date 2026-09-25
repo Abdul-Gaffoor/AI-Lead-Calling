@@ -46,7 +46,7 @@ Daily CSV/XLSX + website API
 ## Commands
 
 ```bash
-.venv/bin/python -m pytest -q                              # 170 tests
+.venv/bin/python -m pytest -q                              # 201 tests
 .venv/bin/uvicorn backend.main:app --reload                # API + console at /
 .venv/bin/alembic -c database/alembic.ini upgrade head     # migrations
 .venv/bin/celery -A workers.celery_app worker --beat       # dispatcher (needs Redis)

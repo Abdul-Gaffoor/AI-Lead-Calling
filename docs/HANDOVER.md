@@ -150,6 +150,13 @@ Before going live:
   person vouching for specific words, so editing a document withdraws it. And
   no figure appears in the curated content: the solar engine owns every number,
   and content the model reads aloud would otherwise be a way around that rule.
+- **A lost status callback used to stall a campaign permanently.** Concurrency
+  counts calls in an active state, and a call only leaves that state when the
+  provider says so — so one dropped webhook held a slot for good, and five of
+  them stopped a five-concurrency campaign dialling with nothing in the logs.
+  The dispatcher now fails out calls older than `STUCK_CALL_TIMEOUT_MINUTES`
+  and returns them to the retry policy. This never showed up on the mock
+  provider, which always calls back.
 - **Review flags are fixed codes, not free text.** MVP §38 measures the platform
   on Telugu understanding, field capture and classification accuracy; those
   numbers only exist if the faults are countable. An "incorrect" verdict must

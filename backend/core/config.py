@@ -46,9 +46,26 @@ class Settings(BaseSettings):
     exotel_caller_id: str = ""
     exotel_subdomain: str = "api.exotel.com"
     exotel_flow_app_id: str = ""
+    #: Which callbacks to subscribe to. "terminal" is the one that matters:
+    #: without the completion callback a call never leaves an active state and
+    #: holds a concurrency slot for good.
+    exotel_status_callback_events: str = "terminal"
+    #: Ask for JSON rather than Exotel's default form encoding. The webhook
+    #: route accepts both, so this only makes the payload predictable.
+    exotel_status_callback_content_type: str = "application/json"
+    exotel_timeout_seconds: float = 20.0
+    #: Transient failures (timeout, 429, 5xx) are retried this many times
+    #: before the attempt is burned. A dropped connection should not cost a
+    #: customer one of their three attempts.
+    exotel_max_retries: int = 2
 
     #: Shared key the Swaraj website uses to post leads (MVP section 2B).
     website_api_key: str = ""
+
+    #: A call still "in flight" after this long has almost certainly lost its
+    #: status callback. It is failed out so its concurrency slot returns to
+    #: the campaign; 0 disables the sweep.
+    stuck_call_timeout_minutes: int = 30
 
     # Worker
     redis_url: str = "redis://localhost:6379/0"

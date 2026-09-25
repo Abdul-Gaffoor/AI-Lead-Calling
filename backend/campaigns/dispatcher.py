@@ -60,6 +60,56 @@ def in_flight_count(db: Session, campaign_id: int) -> int:
     )
 
 
+def reclaim_stuck_calls(db: Session, campaign_id: int | None = None) -> int:
+    """Fail out calls whose status callback never arrived.
+
+    A call only leaves an active state when the provider says so. If that
+    callback is lost — a dropped webhook, a misconfigured PUBLIC_BASE_URL, a
+    provider incident — the attempt counts against concurrency forever. At a
+    concurrency of five, five lost callbacks stop the campaign dialling for
+    good, silently and permanently.
+
+    Each reclaimed attempt goes back through the normal retry path, so the
+    lead is tried again rather than quietly dropped.
+    """
+    if settings.stuck_call_timeout_minutes <= 0:
+        return 0
+
+    cutoff = utcnow() - dt.timedelta(minutes=settings.stuck_call_timeout_minutes)
+    statement = select(CallAttempt).where(
+        CallAttempt.state.in_(ACTIVE_STATES),
+        CallAttempt.started_at < cutoff,
+    )
+    if campaign_id is not None:
+        statement = statement.where(CallAttempt.campaign_id == campaign_id)
+
+    reclaimed = 0
+    for attempt in db.scalars(statement):
+        # as_aware: SQLite hands back naive datetimes.
+        if as_aware(attempt.started_at) >= cutoff:
+            continue
+        logger.warning(
+            "Call %s stuck in %s since %s with no status callback; failing it out",
+            attempt.id,
+            attempt.state.value,
+            attempt.started_at,
+        )
+        attempt.state = CallState.FAILED
+        if attempt.disposition is None:
+            attempt.disposition = Disposition.TELEPHONY_ERROR
+        attempt.ended_at = utcnow()
+        attempt.summary = (
+            attempt.summary
+            or f"No status callback within {settings.stuck_call_timeout_minutes} minutes"
+        )
+        advance_queue_entry(db, attempt)
+        reclaimed += 1
+
+    if reclaimed:
+        db.flush()
+    return reclaimed
+
+
 def due_entries(db: Session, campaign: Campaign, limit: int) -> list[CampaignLead]:
     now = utcnow()
     stmt = (
@@ -92,6 +142,9 @@ def dispatch_campaign(db: Session, campaign: Campaign) -> int:
         return 0
     if not is_within_calling_window(campaign):
         return 0
+
+    # Before counting free slots, release any the provider never told us about.
+    reclaim_stuck_calls(db, campaign.id)
 
     slots = campaign.concurrency - in_flight_count(db, campaign.id)
     if slots <= 0:

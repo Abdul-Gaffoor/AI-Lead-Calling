@@ -27,6 +27,11 @@ x-app-env: &app-env
   EXOTEL_CALLER_ID: ${EXOTEL_CALLER_ID:-}
   EXOTEL_SUBDOMAIN: ${EXOTEL_SUBDOMAIN:-api.exotel.com}
   EXOTEL_FLOW_APP_ID: ${EXOTEL_FLOW_APP_ID:-}
+  EXOTEL_STATUS_CALLBACK_EVENTS: ${EXOTEL_STATUS_CALLBACK_EVENTS:-terminal}
+  EXOTEL_MAX_RETRIES: ${EXOTEL_MAX_RETRIES:-2}
+  # A call with no status callback after this long is failed out so its
+  # concurrency slot returns to the campaign.
+  STUCK_CALL_TIMEOUT_MINUTES: ${STUCK_CALL_TIMEOUT_MINUTES:-30}
   # Call recordings. "local" writes to the recordings volume below; switch to
   # "s3" with a bucket when they outgrow one disk.
   STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
