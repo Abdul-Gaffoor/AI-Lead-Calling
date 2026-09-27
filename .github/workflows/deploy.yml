@@ -370,4 +370,14 @@ jobs:
             done
             echo "HTTPS did not answer in time; recent proxy logs:"
             docker compose -f docker-compose.prod.yml logs --tail 100 traefik
+            # This one failure mode reads as a healthy stack that 404s
+            # everything, so name it rather than leaving it in the log dump.
+            if docker compose -f docker-compose.prod.yml logs traefik 2>&1 \
+                 | grep -q "is too old"; then
+              echo
+              echo "Traefik could not talk to the Docker daemon, so it never read"
+              echo "the routing labels and has no route to the API. The traefik"
+              echo "image is older than this host's Docker Engine allows: use"
+              echo "traefik:v3.6 or newer in deploy/docker-compose.prod.yml."
+            fi
             exit 1

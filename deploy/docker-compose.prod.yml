@@ -124,7 +124,13 @@ services:
   # proxy) in front of it, or swap to Traefik's file provider: there is only
   # one backend here, so a static route costs nothing.
   traefik:
-    image: traefik:v3.3
+    # 3.6 or newer, and this is not cosmetic. Up to and including 3.5 the
+    # Docker provider pins API version 1.24 when it dials the socket, and
+    # Docker Engine on this host refuses anything below 1.40. The provider
+    # then fails to start, no labels below are ever read, no router exists
+    # and every request 404s while the rest of the stack looks healthy.
+    # 3.6 negotiates the version with the daemon instead.
+    image: traefik:v3.6
     restart: unless-stopped
     command:
       - "--providers.docker=true"

@@ -204,3 +204,26 @@ def test_uvicorn_trusts_only_the_proxy_for_forwarded_headers():
 
     assert "--proxy-headers" in entrypoint
     assert '--forwarded-allow-ips "${FORWARDED_ALLOW_IPS:-127.0.0.1}"' in entrypoint
+
+
+def test_the_proxy_can_talk_to_the_docker_daemon():
+    """Traefik reads its routes off container labels, so the Docker provider
+    starting is the difference between the site working and every request
+    404ing.
+
+    Traefik up to and including 3.5 pins Docker API version 1.24 when it
+    dials the socket. Docker Engine on the deployment host rejects anything
+    below 1.40, so the provider never starts, no router is built from the
+    labels below, and Traefik answers 404 for everything — while the stack
+    reports healthy and the deploy looks like it worked. 3.6 negotiates the
+    API version with the daemon. Downgrading brings the outage back.
+    """
+    image = _compose()["services"]["traefik"]["image"]
+
+    repository, _, tag = image.partition(":")
+    assert repository == "traefik", image
+    major, minor = (int(part) for part in tag.lstrip("v").split(".")[:2])
+    assert (major, minor) >= (3, 6), (
+        f"{image} pins Docker API 1.24 and cannot read container labels on "
+        "this host; use traefik:v3.6 or newer"
+    )
