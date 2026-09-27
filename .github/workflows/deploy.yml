@@ -364,6 +364,21 @@ jobs:
               if curl -fsSk --resolve "${DOMAIN}:443:127.0.0.1" \
                    "https://${DOMAIN}/health" > /dev/null 2>&1; then
                 echo "Deployment healthy over HTTPS."
+                # The check above passes -k, so it says nothing about whether
+                # the certificate is real. Say so explicitly: a self-signed
+                # default warns in every browser and looks like an outage.
+                # A first issue can lag the deploy, so this reports, never fails.
+                if curl -fsS --resolve "${DOMAIN}:443:127.0.0.1" \
+                     "https://${DOMAIN}/health" > /dev/null 2>&1; then
+                  echo "Certificate verifies for ${DOMAIN}."
+                else
+                  echo "NOTE: serving Traefik's self-signed certificate —"
+                  echo "Let's Encrypt has not issued for ${DOMAIN} yet, so"
+                  echo "browsers will warn. HTTP-01 needs ${DOMAIN} to resolve"
+                  echo "to this server with port 80 reachable. ACME log:"
+                  docker compose -f docker-compose.prod.yml logs --tail 200 \
+                    traefik 2>&1 | grep -i acme | tail -10 || true
+                fi
                 exit 0
               fi
               sleep 5
