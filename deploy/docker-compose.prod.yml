@@ -13,7 +13,7 @@ x-app-env: &app-env
   REDIS_URL: redis://redis:6379/0
   JWT_SECRET: ${JWT_SECRET}
   AUTO_CREATE_TABLES: "false"
-  # Requests reach the API only from Caddy on the Docker network, so the
+  # Requests reach the API only from Traefik on the Docker network, so the
   # X-Forwarded-* headers it sets are trustworthy.
   FORWARDED_ALLOW_IPS: "*"
   # Telephony — defaults to the mock provider so no real calls are placed
@@ -65,12 +65,28 @@ services:
     image: ${APP_IMAGE}
     restart: unless-stopped
     environment: *app-env
-    # Loopback only: the outside world reaches the API through Caddy over
-    # HTTPS. Publishing 8000 here would leave a plaintext door open.
+    # Loopback only: the outside world reaches the API through Traefik over
+    # HTTPS. Publishing 8000 here would leave a plaintext door open, but
+    # keeping it on localhost lets the deploy health-check and admin commands
+    # reach it from the host.
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - recordings:/var/lib/swaraj/recordings
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.swaraj.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.swaraj.entrypoints=websecure"
+      - "traefik.http.routers.swaraj.tls.certresolver=le"
+      - "traefik.http.routers.swaraj.middlewares=swaraj-security"
+      - "traefik.http.services.swaraj.loadbalancer.server.port=8000"
+      # HSTS means a browser refuses
+      # plaintext for a year after one good HTTPS response.
+      - "traefik.http.middlewares.swaraj-security.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.swaraj-security.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.swaraj-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.swaraj-security.headers.frameDeny=true"
+      - "traefik.http.middlewares.swaraj-security.headers.referrerPolicy=strict-origin-when-cross-origin"
     depends_on:
       db:
         condition: service_healthy
@@ -96,24 +112,47 @@ services:
       app:
         condition: service_healthy
 
-  # TLS terminator (MVP section 32). Obtains and renews its certificate
-  # automatically; see deploy/Caddyfile for the two settings it reads.
-  caddy:
-    image: caddy:2-alpine
+  # TLS terminator and router (MVP section 32). Reads the routing rules from
+  # the labels on the app service above, and gets its certificate from Let's
+  # Encrypt automatically.
+  #
+  # NOTE ON THE DOCKER SOCKET: the docker provider needs it to read those
+  # labels, and socket access is effectively root on this host — an escape in
+  # an internet-facing proxy would own the machine. It is mounted read-only,
+  # which limits little, because the socket is an API rather than a file. If
+  # that trade is not acceptable, put a socket proxy (tecnativa/docker-socket-
+  # proxy) in front of it, or swap to Traefik's file provider: there is only
+  # one backend here, so a static route costs nothing.
+  traefik:
+    image: traefik:v3.3
     restart: unless-stopped
-    environment:
-      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
-      TLS_ISSUER: ${TLS_ISSUER:-internal}
+    command:
+      - "--providers.docker=true"
+      # Nothing is exposed unless it opts in with traefik.enable=true.
+      - "--providers.docker.exposedByDefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.le.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+      # HTTP-01: Let's Encrypt calls back on port 80, so that port has to be
+      # open to the internet even though everything redirects to HTTPS.
+      - "--certificatesresolvers.le.acme.httpchallenge=true"
+      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
+      # The dashboard and API stay off: they would expose the whole routing
+      # table, unauthenticated, on a public host.
+      - "--api.dashboard=false"
+      - "--log.level=INFO"
+      - "--accesslog=true"
     ports:
       - "80:80"
       - "443:443"
-      - "443:443/udp"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # Certificates and the internal CA live here; losing this volume means
-      # re-issuing on every deploy and hitting Let's Encrypt rate limits.
-      - caddydata:/data
-      - caddyconfig:/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Certificates live here. Losing this volume means re-issuing on every
+      # deploy, which hits Let's Encrypt's rate limit and takes HTTPS down.
+      - letsencrypt:/letsencrypt
     depends_on:
       app:
         condition: service_healthy
@@ -145,8 +184,7 @@ services:
 volumes:
   pgdata:
   redisdata:
-  caddydata:
-  caddyconfig:
+  letsencrypt:
   # Call audio. Survives redeploys like the database does; deleting it loses
   # every recording that has not aged out.
   recordings:

@@ -4,7 +4,7 @@ Pushes to `master` run `.github/workflows/deploy.yml`, which:
 
 1. **Tests** — runs the full pytest suite; nothing deploys if tests fail.
 2. **Builds** — builds the backend Docker image (migrations + API, see `Dockerfile`) and pushes it to GitHub Container Registry as `ghcr.io/<owner>/<repo>:<commit-sha>`.
-3. **Deploys** — copies `deploy/docker-compose.prod.yml` and `deploy/Caddyfile` to the deploy directory on the server over SSH, writes the `.env` file from secrets, pulls the new image, restarts the stack, and waits for `/health` to pass **over HTTPS**. On container start the app waits for Postgres, applies Alembic migrations, then serves the API on port 8000 — bound to loopback, because everything from outside the server arrives through the TLS terminator.
+3. **Deploys** — copies `deploy/docker-compose.prod.yml` to the deploy directory on the server over SSH, writes the `.env` file from secrets, pulls the new image, restarts the stack, and waits for `/health` to pass **over HTTPS**. On container start the app waits for Postgres, applies Alembic migrations, then serves the API on port 8000 — bound to loopback, because everything from outside the server arrives through the TLS terminator.
 
 The workflow can also be run manually from the Actions tab (workflow_dispatch). Pull requests only run the test job.
 
@@ -26,28 +26,43 @@ The deploy job targets the GitHub environment named **`Test`** (Settings → Env
 
 > ⚠️ Prefer **secrets** for `SERVER_SSH_KEY`, `JWT_SECRET` and `POSTGRES_PASSWORD`: environment *variables* display their values in plain text to anyone with access to repo settings and are not masked in workflow logs; secrets are encrypted and masked.
 
-### TLS / HTTPS
+### TLS / HTTPS — Traefik
 
-The stack terminates TLS in a Caddy container (`deploy/Caddyfile`); the API
-publishes port 8000 on loopback only, so nothing answers plain HTTP from the
-internet. Caddy redirects port 80 to HTTPS and renews certificates by itself.
+A Traefik container terminates TLS and routes to the app. The API publishes
+port 8000 on loopback only, so nothing answers plain HTTP from the internet.
+Traefik redirects port 80 to HTTPS and renews its certificate by itself.
 
-There are two modes, chosen by whether `DOMAIN` is set:
+Routing comes from labels on the `app` service in
+`deploy/docker-compose.prod.yml`, so there is no proxy config file to ship:
 
-| `DOMAIN` | Certificate | Browser behaviour |
-|---|---|---|
-| set (with `ACME_EMAIL`) | Let's Encrypt, publicly trusted, auto-renewed | No warning. **Use this for the pilot.** |
-| unset | Caddy's internal CA, for the server's own host/IP | Encrypted, but a warning users must click through, and HSTS is ignored |
+    traefik.http.routers.swaraj.rule=Host(`${DOMAIN}`)
+    traefik.http.services.swaraj.loadbalancer.server.port=8000
 
-Point the domain's A record at the server **before** the first deploy with
-`DOMAIN` set: Let's Encrypt validates over port 80, and repeated failures hit a
-rate limit that leaves HTTPS unavailable for hours.
+**`DOMAIN` and `ACME_EMAIL` are both required** — Traefik routes on the host
+name and Let's Encrypt needs a contact address. The deploy stops with a clear
+message if either is missing, rather than bringing up a stack that answers
+nothing. There is no self-signed fallback mode any more; Traefik will serve its
+own default certificate for a request that matches no router, which browsers
+reject, so the domain has to be right.
 
-The certificates live in the `caddydata` Docker volume. Keep it across
-redeploys — deleting it forces re-issuance and risks that same rate limit.
+Point the domain's A record at the server **before** the first deploy: Let's
+Encrypt validates over port 80, and repeated failures hit a rate limit that
+leaves HTTPS unavailable for hours. Port 80 must stay open to the internet for
+that challenge even though everything redirects to HTTPS.
 
-Set `PUBLIC_BASE_URL` to the `https://` URL too, so telephony callbacks arrive
-encrypted; with `DOMAIN` set and `PUBLIC_BASE_URL` empty, the deploy derives it.
+Certificates live in the `letsencrypt` Docker volume. Keep it across redeploys —
+deleting it forces re-issuance and risks that same rate limit.
+
+`PUBLIC_BASE_URL` defaults to `https://<DOMAIN>` when left empty, so telephony
+callbacks arrive encrypted at the same name.
+
+> ⚠️ **Traefik reads the Docker socket** to discover those labels, and socket
+> access is effectively root on the host — an escape in an internet-facing
+> proxy would own the machine. It is mounted read-only, which limits little,
+> because the socket is an API rather than a file. To close that off, either
+> put a socket proxy (`tecnativa/docker-socket-proxy`) in front of it, or move
+> the route into Traefik's file provider: there is only one backend here, so a
+> static route costs nothing. The Traefik dashboard and API are disabled.
 
 `GITHUB_TOKEN` is provided automatically by Actions and is used both to push the image to GHCR and to pull it on the server during the deploy — no extra registry secret is needed. You can also add required reviewers on the `Test` environment to gate deploys.
 
@@ -153,7 +168,7 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f app
 
 # Certificate problems (issuance, renewal, ACME challenges) show up here
-docker compose -f docker-compose.prod.yml logs -f caddy
+docker compose -f docker-compose.prod.yml logs -f traefik
 
 # Restart
 docker compose -f docker-compose.prod.yml restart app

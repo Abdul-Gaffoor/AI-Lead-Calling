@@ -16,7 +16,6 @@ yaml = pytest.importorskip("yaml")
 
 DEPLOY_DIR = Path(__file__).resolve().parents[2] / "deploy"
 COMPOSE = DEPLOY_DIR / "docker-compose.prod.yml"
-CADDYFILE = DEPLOY_DIR / "Caddyfile"
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github/workflows/deploy.yml"
 
 
@@ -45,35 +44,55 @@ def test_the_api_is_never_published_in_plaintext():
 
 
 def test_a_tls_terminator_serves_https():
-    caddy = _compose()["services"]["caddy"]
-    published = _published_ports(caddy)
+    traefik = _compose()["services"]["traefik"]
+    published = _published_ports(traefik)
 
     assert any(p.startswith("443:") for p in published), published
-    # Port 80 must stay open: Caddy redirects to HTTPS there and answers the
-    # ACME challenge that renews the certificate.
+    # Port 80 must stay open: it carries the HTTPS redirect and answers the
+    # ACME HTTP-01 challenge that issues and renews the certificate.
     assert any(p.startswith("80:") for p in published), published
 
 
 def test_certificates_survive_a_redeploy():
-    """Without a persistent volume Caddy re-issues on every deploy and hits
-    Let's Encrypt's rate limit, which takes HTTPS down for a week."""
+    """Without a persistent volume the certificate is re-issued on every
+    deploy, which hits Let's Encrypt's rate limit and takes HTTPS down."""
     compose = _compose()
-    mounts = compose["services"]["caddy"]["volumes"]
+    mounts = compose["services"]["traefik"]["volumes"]
 
-    assert any(str(m).startswith("caddydata:") for m in mounts), mounts
-    assert "caddydata" in compose["volumes"]
-
-
-def test_the_proxy_reaches_the_api_and_forces_hsts():
-    caddyfile = CADDYFILE.read_text()
-
-    assert "reverse_proxy app:8000" in caddyfile
-    assert "Strict-Transport-Security" in caddyfile
+    assert any("letsencrypt" in str(m) for m in mounts), mounts
+    assert "letsencrypt" in compose["volumes"]
 
 
-def test_the_deploy_ships_the_proxy_config():
-    """The stack will not start if the Caddyfile is missing on the server."""
-    assert "deploy/Caddyfile" in WORKFLOW.read_text()
+def test_the_proxy_routes_to_the_api_and_forces_hsts():
+    labels = _compose()["services"]["app"]["labels"]
+    joined = "\n".join(labels)
+
+    assert "traefik.enable=true" in joined
+    assert "loadbalancer.server.port=8000" in joined
+    assert "Host(`${DOMAIN}`)" in joined, "the router must match the configured domain"
+    assert "headers.stsSeconds=31536000" in joined, "HSTS"
+
+
+def test_nothing_is_exposed_without_opting_in():
+    """exposedByDefault would publish every container on the box, including
+    the database, the moment it joined this network."""
+    command = "\n".join(_compose()["services"]["traefik"]["command"])
+    assert "--providers.docker.exposedByDefault=false" in command
+
+
+def test_the_traefik_dashboard_is_off():
+    """It exposes the whole routing table unauthenticated."""
+    command = "\n".join(_compose()["services"]["traefik"]["command"])
+    assert "--api.dashboard=false" in command
+    assert "--api.insecure=true" not in command
+
+
+def test_the_deploy_refuses_to_run_without_a_domain():
+    """Traefik routes on Host(DOMAIN). With none set the router never loads
+    and the site answers nothing, so the deploy stops instead."""
+    workflow = WORKFLOW.read_text()
+    assert 'ERROR: DOMAIN is not set.' in workflow
+    assert 'ERROR: ACME_EMAIL is not set' in workflow
 
 
 def test_the_deploy_fails_when_https_does_not_answer():
@@ -81,7 +100,7 @@ def test_the_deploy_fails_when_https_does_not_answer():
     ever reach the platform through TLS."""
     workflow = WORKFLOW.read_text()
 
-    assert 'https://${SITE_ADDRESS}/health' in workflow
+    assert 'https://${DOMAIN}/health' in workflow
 
 
 def test_a_password_with_url_characters_still_connects(monkeypatch):

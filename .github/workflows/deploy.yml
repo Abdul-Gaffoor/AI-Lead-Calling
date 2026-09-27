@@ -150,7 +150,7 @@ jobs:
           username: ${{ secrets.SERVER_USER || vars.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY || vars.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || vars.SERVER_PORT || 22 }}
-          source: deploy/docker-compose.prod.yml,deploy/Caddyfile
+          source: deploy/docker-compose.prod.yml
           target: ${{ vars.DEPLOY_DIR || '/opt/swaraj-solar' }}
           strip_components: 1
 
@@ -162,9 +162,8 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || vars.POSTGRES_PASSWORD }}
-          # TLS — with a domain Caddy gets a publicly trusted certificate; without
-          # one it falls back to the server host and its own CA, which still
-          # encrypts but makes browsers warn.
+          # TLS — Traefik routes on Host(DOMAIN) and gets a Let's Encrypt
+          # certificate for it. Both are required.
           DOMAIN: ${{ vars.DOMAIN }}
           ACME_EMAIL: ${{ vars.ACME_EMAIL }}
           SERVER_HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
@@ -219,26 +218,31 @@ jobs:
             set -e
             cd "${DEPLOY_DIR}"
 
-            # A domain gets a publicly trusted certificate; with none configured
-            # fall back to the server's own host/IP and Caddy's internal CA, so
-            # the pilot is still encrypted rather than plaintext.
-            if [ -n "${DOMAIN}" ]; then
-              SITE_ADDRESS="${DOMAIN}"
-              TLS_ISSUER="${ACME_EMAIL:-internal}"
-            else
-              SITE_ADDRESS="${SERVER_HOST}"
-              TLS_ISSUER="internal"
+            # Traefik routes on Host(DOMAIN) and gets its certificate from
+            # Let's Encrypt, so a domain is not optional here. Without one the
+            # router never loads and the site is unreachable — say so now
+            # rather than after the stack is up and answering nothing.
+            if [ -z "${DOMAIN}" ]; then
+              echo "ERROR: DOMAIN is not set."
+              echo "Set it to the hostname pointed at this server, e.g."
+              echo "  DOMAIN=voice.example.com   (Actions variable)"
+              echo "  ACME_EMAIL=ops@example.com (Actions variable)"
+              exit 1
+            fi
+            if [ -z "${ACME_EMAIL}" ]; then
+              echo "ERROR: ACME_EMAIL is not set; Let's Encrypt requires a contact address."
+              exit 1
             fi
             # Telephony callbacks must arrive over HTTPS at the same name.
-            if [ -z "${PUBLIC_BASE_URL}" ] && [ -n "${DOMAIN}" ]; then
+            if [ -z "${PUBLIC_BASE_URL}" ]; then
               PUBLIC_BASE_URL="https://${DOMAIN}"
             fi
 
             umask 077
             cat > .env <<EOF
             APP_IMAGE=${APP_IMAGE}
-            SITE_ADDRESS=${SITE_ADDRESS}
-            TLS_ISSUER=${TLS_ISSUER}
+            DOMAIN=${DOMAIN}
+            ACME_EMAIL=${ACME_EMAIL}
             JWT_SECRET=${JWT_SECRET}
             POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
             TELEPHONY_PROVIDER=${TELEPHONY_PROVIDER}
@@ -316,7 +320,7 @@ jobs:
             docker compose -f docker-compose.prod.yml pull
 
             # `up -d` blocks while it waits for the app's healthcheck, because
-            # worker and caddy depend on it being healthy. Bound that wait well
+            # worker and traefik depend on it being healthy. Bound that wait well
             # inside the SSH action's own limit: when the action times out it
             # kills the session mid-command, so the diagnostics below never run
             # and the failure arrives with no explanation at all.
@@ -327,8 +331,8 @@ jobs:
               docker compose -f docker-compose.prod.yml logs --tail 120 app || true
               echo "=== db ==="
               docker compose -f docker-compose.prod.yml logs --tail 40 db || true
-              echo "=== caddy ==="
-              docker compose -f docker-compose.prod.yml logs --tail 40 caddy || true
+              echo "=== traefik ==="
+              docker compose -f docker-compose.prod.yml logs --tail 40 traefik || true
               docker logout ghcr.io
               exit 1
             fi
@@ -353,16 +357,17 @@ jobs:
 
             # The API answers, but customers only ever reach it through TLS, so a
             # broken proxy is a failed deploy — not a healthy one.
-            # -k because the fallback certificate is issued by Caddy's own CA.
-            echo "Checking HTTPS through the proxy at ${SITE_ADDRESS}..."
+            # -k because the certificate may still be the self-signed default
+            # while Let's Encrypt issues the real one on first deploy.
+            echo "Checking HTTPS through Traefik at ${DOMAIN}..."
             for i in $(seq 1 24); do
-              if curl -fsSk --resolve "${SITE_ADDRESS}:443:127.0.0.1" \
-                   "https://${SITE_ADDRESS}/health" > /dev/null 2>&1; then
+              if curl -fsSk --resolve "${DOMAIN}:443:127.0.0.1" \
+                   "https://${DOMAIN}/health" > /dev/null 2>&1; then
                 echo "Deployment healthy over HTTPS."
                 exit 0
               fi
               sleep 5
             done
             echo "HTTPS did not answer in time; recent proxy logs:"
-            docker compose -f docker-compose.prod.yml logs --tail 100 caddy
+            docker compose -f docker-compose.prod.yml logs --tail 100 traefik
             exit 1

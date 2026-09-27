@@ -86,19 +86,19 @@ GitHub Actions on push: tests → **migrations verified against real PostgreSQL*
 image built and pushed to GHCR → SSH deploy → health check.
 
 Server runs five containers via `deploy/docker-compose.prod.yml`: `app`, `worker`,
-`db` (PostgreSQL 16 with pgvector), `redis` and `caddy`. Migrations run automatically on container start.
+`db` (PostgreSQL 16 with pgvector), `redis` and `traefik`. Migrations run automatically on container start.
 Deployment details and the required secrets: **`docs/DEPLOYMENT.md`**.
 
 The deploy job is pinned to a GitHub environment named **`Test`**. Actions secrets
 do not move between repos — recreate that environment and its values first, or the
 deploy fails at the SSH step.
 
-`caddy` terminates TLS: it redirects port 80, renews its
-certificate by itself, and is the only thing exposed to the internet — the API
-publishes 8000 on loopback. With a `DOMAIN` set the certificate is a publicly
-trusted Let's Encrypt one; with none it falls back to the server's own host and
-Caddy's internal CA, which encrypts but makes browsers warn. **Set a domain
-before the customer pilot.** The deploy fails if HTTPS does not answer.
+`traefik` terminates TLS and routes to the app: it redirects port 80, renews
+its Let's Encrypt certificate by itself, and is the only thing exposed to the
+internet — the API publishes 8000 on loopback. Routing comes from labels on the
+`app` service, so there is no proxy config file. `DOMAIN` and `ACME_EMAIL` are
+both required and the deploy stops without them. The deploy also fails if HTTPS
+does not answer.
 
 Console assets are content-fingerprinted and the page is served `no-store`, so a
 deploy is picked up without a hard refresh.
