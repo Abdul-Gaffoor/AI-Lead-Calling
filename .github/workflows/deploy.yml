@@ -371,14 +371,33 @@ jobs:
                 if curl -fsS --resolve "${DOMAIN}:443:127.0.0.1" \
                      "https://${DOMAIN}/health" > /dev/null 2>&1; then
                   echo "Certificate verifies for ${DOMAIN}."
-                else
-                  echo "NOTE: serving Traefik's self-signed certificate —"
-                  echo "Let's Encrypt has not issued for ${DOMAIN} yet, so"
-                  echo "browsers will warn. HTTP-01 needs ${DOMAIN} to resolve"
-                  echo "to this server with port 80 reachable. ACME log:"
-                  docker compose -f docker-compose.prod.yml logs --tail 200 \
-                    traefik 2>&1 | grep -i acme | tail -10 || true
+                  exit 0
                 fi
+
+                # Traefik holds on to a failed issue and does not retry on
+                # any useful timescale, and `up -d` leaves it alone when its
+                # own config has not changed. So after the DNS or firewall
+                # fault that caused the failure is repaired, every later
+                # deploy keeps serving the self-signed certificate until
+                # someone restarts the proxy by hand. Do it here instead.
+                echo "Serving the self-signed certificate; restarting Traefik"
+                echo "to retry issuance..."
+                docker compose -f docker-compose.prod.yml restart traefik
+                for _ in $(seq 1 18); do
+                  sleep 5
+                  if curl -fsS --resolve "${DOMAIN}:443:127.0.0.1" \
+                       "https://${DOMAIN}/health" > /dev/null 2>&1; then
+                    echo "Certificate verifies for ${DOMAIN}."
+                    exit 0
+                  fi
+                done
+
+                echo "NOTE: still serving Traefik's self-signed certificate —"
+                echo "Let's Encrypt has not issued for ${DOMAIN}, so browsers"
+                echo "will warn. HTTP-01 needs ${DOMAIN} to resolve to this"
+                echo "server with port 80 reachable from the internet. ACME log:"
+                docker compose -f docker-compose.prod.yml logs --tail 200 \
+                  traefik 2>&1 | grep -i acme | tail -10 || true
                 exit 0
               fi
               sleep 5
