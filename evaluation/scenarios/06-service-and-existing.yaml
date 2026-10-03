@@ -1,0 +1,141 @@
+# Existing customers and service work (MVP §17, §4)
+#
+# MVP §4 is blunt about why this matters: it "prevents embarrassing
+# situations such as AI trying to sell a new system to an existing customer
+# who is calling about maintenance." Every scenario here is a case where
+# continuing the sales script would be the wrong answer.
+
+- id: svc-te-low-generation
+  description: Existing system under-performing
+  language: te-IN
+  dialect: telangana
+  service: SOLAR_MAINTENANCE
+  tags: [service, existing-customer]
+  turns:
+    - customer: "మీ దగ్గరే రెండేళ్ళ క్రితం పెట్టించుకున్నాను."
+    - customer: "ఈ మధ్య generation బాగా తగ్గింది."
+      expect: {extracted: {issue: "low generation"}}
+    - customer: "మూడు కిలోవాట్ system."
+      expect: {extracted: {existing_capacity: 3}}
+  expect:
+    service: SOLAR_MAINTENANCE
+    intent: SERVICE_REQUEST
+
+- id: svc-te-inverter-fault
+  description: Inverter showing an error
+  language: te-IN
+  dialect: andhra
+  service: SOLAR_MAINTENANCE
+  tags: [service, urgent]
+  turns:
+    - customer: "Inverter మీద red light వస్తుంది, పని చేయట్లేదు."
+      expect: {extracted: {issue: "inverter"}}
+    - customer: "అర్జెంటుగా రావాలి."
+      expect: {extracted: {urgency: "high"}}
+  expect:
+    service: SOLAR_MAINTENANCE
+    intent: SERVICE_REQUEST
+
+- id: svc-mixed-cleaning
+  description: Panel cleaning request
+  language: mixed
+  dialect: mixed
+  service: PANEL_CLEANING
+  tags: [service, cleaning, code-mixed]
+  turns:
+    - customer: "Panels మీద దుమ్ము పేరుకుంది. Cleaning చేయించాలి."
+  expect:
+    service: PANEL_CLEANING
+    intent: SERVICE_REQUEST
+
+- id: svc-en-monitoring
+  description: Monitoring app not updating
+  language: en-IN
+  dialect: english
+  service: SOLAR_MAINTENANCE
+  tags: [service]
+  turns:
+    - customer: "The monitoring app hasn't shown any data for a week."
+      expect: {extracted: {issue: "monitoring"}}
+  expect:
+    service: SOLAR_MAINTENANCE
+    intent: SERVICE_REQUEST
+
+- id: svc-te-battery
+  description: Battery issue on a hybrid system
+  language: te-IN
+  dialect: telangana
+  service: SOLAR_MAINTENANCE
+  tags: [service]
+  turns:
+    - customer: "Battery backup ఇవ్వట్లేదు, అరగంటకే అయిపోతుంది."
+      expect: {extracted: {issue: "battery"}}
+  expect:
+    service: SOLAR_MAINTENANCE
+
+- id: upgrade-te-expansion
+  description: Existing customer wanting more capacity
+  language: te-IN
+  dialect: telangana
+  service: EXISTING_SOLAR_UPGRADE
+  tags: [existing-customer, upgrade]
+  turns:
+    - customer: "ఇప్పటికే మూడు కిలోవాట్ ఉంది. ఇంకో రెండు కిలోవాట్ పెంచాలి."
+      expect: {extracted: {existing_capacity: 3, expansion_requirement: 2}}
+  expect:
+    service: EXISTING_SOLAR_UPGRADE
+
+- id: upgrade-en-added-ac
+  description: Load has grown since installation
+  language: en-IN
+  dialect: english
+  service: EXISTING_SOLAR_UPGRADE
+  tags: [existing-customer, upgrade]
+  turns:
+    - customer: "We put in 5 kW four years ago but we've added two air conditioners since."
+      expect: {extracted: {existing_capacity: 5}}
+  expect:
+    service: EXISTING_SOLAR_UPGRADE
+
+- id: existing-te-already-have
+  description: >
+    Already a customer and not interested in more. Selling here is exactly
+    the embarrassment MVP §4 warns about.
+  language: te-IN
+  dialect: telangana
+  tags: [existing-customer]
+  turns:
+    - customer: "మీ దగ్గరే already solar పెట్టించుకున్నాను కదా?"
+  expect:
+    intent: EXISTING_CUSTOMER
+
+- id: existing-en-competitor
+  description: Has solar, but somebody else installed it
+  language: en-IN
+  dialect: english
+  tags: [existing-customer]
+  turns:
+    - customer: "I already have solar, another company did it last year."
+  expect:
+    intent: EXISTING_CUSTOMER
+
+- id: wrong-number-en
+  description: Wrong number — close the call, do not qualify
+  language: en-IN
+  dialect: english
+  deterministic: false
+  tags: [wrong-number]
+  turns:
+    - customer: "You have the wrong number, there is no Ramesh here."
+  expect:
+    intent: WRONG_NUMBER
+
+- id: wrong-number-te
+  description: Wrong number in Telugu
+  language: te-IN
+  dialect: telangana
+  tags: [wrong-number]
+  turns:
+    - customer: "ఇది తప్పు number. ఆ పేరుతో ఎవరూ లేరు."
+  expect:
+    intent: WRONG_NUMBER

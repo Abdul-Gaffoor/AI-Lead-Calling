@@ -1,0 +1,258 @@
+# Residential rooftop (MVP §12) and PM Surya Ghar (MVP §13)
+#
+# The bread and butter of the campaign. These are model-graded: whether the
+# AI hears "own house" as property_owned depends on the LLM, not on the
+# orchestrator.
+
+- id: res-te-full-telangana
+  description: A complete Telangana Telugu qualification, straight through
+  language: te-IN
+  dialect: telangana
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, happy-path]
+  lead: {name: "రమేష్", city: "మియాపూర్"}
+  turns:
+    - customer: "నమస్తే. అవును, solar గురించే enquiry ఇచ్చాను."
+    - customer: "మాది సొంత ఇల్లు, independent house."
+      expect: {extracted: {property_owned: true}}
+    - customer: "నెలకి ఏడు వేల ఐదు వందలు బిల్లు వస్తుంది."
+      expect: {extracted: {monthly_bill: 7500}}
+    - customer: "డాబా ఉంది, shadow ఏమీ లేదు."
+      expect: {extracted: {roof_available: true}}
+    - customer: "ఒక నెలలో పెట్టించుకోవాలి అనుకుంటున్నాను."
+    - customer: "అవును, survey కి రండి."
+  expect:
+    service: RESIDENTIAL_SOLAR
+    intent: SITE_SURVEY_REQUESTED
+    classification: HOT
+
+- id: res-te-full-andhra
+  description: The same flow in Andhra Telugu
+  language: te-IN
+  dialect: andhra
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, happy-path]
+  lead: {name: "శ్రీనివాస్", city: "విజయవాడ"}
+  turns:
+    - customer: "ఆఁ చెప్పండి."
+    - customer: "మా ఇల్లు మాదే. విజయవాడలో ఉంటాము."
+      expect: {extracted: {property_owned: true}}
+    - customer: "కరెంటు బిల్లు నెలకి అయిదు వేలు అవుతుంది."
+      expect: {extracted: {monthly_bill: 5000}}
+    - customer: "మేడ మీద ఖాళీగా ఉంది."
+      expect: {extracted: {roof_available: true}}
+    - customer: "రెండు నెలల్లో చూద్దాము."
+  expect:
+    service: RESIDENTIAL_SOLAR
+    classification: WARM
+
+- id: res-mixed-code-switching
+  description: Heavy Telugu-English mixing, which is how most people speak
+  language: mixed
+  dialect: mixed
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, code-mixed]
+  turns:
+    - customer: "Haan చెప్పండి, solar panels గురించేనా?"
+    - customer: "Own house ఉంది, terrace కూడా free గా ఉంది."
+      expect: {extracted: {property_owned: true, roof_available: true}}
+    - customer: "Bill monthly 9000 వస్తుంది."
+      expect: {extracted: {monthly_bill: 9000}}
+    - customer: "Next month install చేయించాలి. Survey book చేయండి."
+  expect:
+    service: RESIDENTIAL_SOLAR
+    intent: SITE_SURVEY_REQUESTED
+    classification: HOT
+
+- id: res-en-full
+  description: English-speaking customer
+  language: en-IN
+  dialect: english
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, happy-path]
+  turns:
+    - customer: "Yes, I enquired about rooftop solar."
+    - customer: "It's my own independent house in Kondapur."
+      expect: {extracted: {property_owned: true}}
+    - customer: "My bill is around twelve thousand a month."
+      expect: {extracted: {monthly_bill: 12000}}
+    - customer: "Terrace is free, no shadow from neighbours."
+      expect: {extracted: {roof_available: true}}
+    - customer: "I want it done this month. Please send someone."
+  expect:
+    service: RESIDENTIAL_SOLAR
+    intent: SITE_SURVEY_REQUESTED
+    classification: HOT
+
+- id: res-te-rented
+  description: A tenant cannot install — must not be scored HOT
+  language: te-IN
+  dialect: telangana
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, disqualifying]
+  turns:
+    - customer: "నేను అద్దె ఇంట్లో ఉంటున్నాను."
+      expect: {extracted: {property_owned: false}}
+    - customer: "Owner ని అడగాలి."
+  expect:
+    service: RESIDENTIAL_SOLAR
+    classification: COLD
+
+- id: res-te-apartment-no-roof
+  description: Flat with no private roof
+  language: te-IN
+  dialect: telangana
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, disqualifying]
+  turns:
+    - customer: "Apartment లో ఉంటాము, common terrace."
+      expect: {extracted: {roof_available: false}}
+    - customer: "Association permission కావాలి."
+  expect:
+    service: RESIDENTIAL_SOLAR
+    classification: COLD
+
+- id: res-te-low-bill
+  description: A small bill makes rooftop solar a poor fit
+  language: te-IN
+  dialect: andhra
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, low-value]
+  turns:
+    - customer: "మా ఇల్లు మాదే."
+    - customer: "బిల్లు నెలకి ఎనిమిది వందలు మాత్రమే."
+      expect: {extracted: {monthly_bill: 800}}
+  expect:
+    service: RESIDENTIAL_SOLAR
+    classification: COLD
+
+- id: res-te-bill-in-units
+  description: Customer quotes consumption rather than rupees
+  language: te-IN
+  dialect: telangana
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, units]
+  turns:
+    - customer: "బిల్లు ఎంతో గుర్తు లేదు, కానీ నెలకి ఆరు వందల యూనిట్లు వాడతాము."
+      expect: {extracted: {monthly_units: 600}}
+  expect:
+    service: RESIDENTIAL_SOLAR
+
+- id: res-te-corrects-bill
+  description: Customer gives one figure then corrects it
+  language: te-IN
+  dialect: telangana
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, correction, numbers]
+  turns:
+    - customer: "బిల్లు ఆరు వేలు."
+      expect: {extracted: {monthly_bill: 6000}}
+    - customer: "సారీ, ఆరు కాదు, ఎనిమిది వేలు."
+      expect: {extracted: {monthly_bill: 8000}}
+  expect:
+    service: RESIDENTIAL_SOLAR
+
+- id: res-te-asks-price
+  description: Price question — the figure must come from the solar engine
+  language: te-IN
+  dialect: telangana
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, pricing, solar-engine]
+  turns:
+    - customer: "నెలకి పది వేలు బిల్లు. ఎంత ఖర్చు అవుతుంది?"
+      expect: {extracted: {monthly_bill: 10000}}
+  expect:
+    service: RESIDENTIAL_SOLAR
+
+- id: res-te-asks-subsidy
+  description: Subsidy question — answer must come from approved knowledge
+  language: te-IN
+  dialect: andhra
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, subsidy, knowledge]
+  turns:
+    - customer: "Government subsidy ఎంత వస్తుంది?"
+  expect:
+    service: RESIDENTIAL_SOLAR
+
+- id: res-te-callback-tomorrow
+  description: "The callback from MVP §7 — overrides the retry rules"
+  language: te-IN
+  dialect: telangana
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, callback]
+  turns:
+    - customer: "ఇప్పుడు కుదరదు. రేపు పదకొండు గంటలకి call చేయండి."
+  expect:
+    intent: CALLBACK_REQUESTED
+
+- id: res-translit-full
+  description: Romanised Telugu throughout, as some STT engines return it
+  language: te-IN
+  dialect: mixed
+  service: RESIDENTIAL_SOLAR
+  tags: [residential, transliteration]
+  turns:
+    - customer: "Cheppandi sir."
+    - customer: "Sonta illu, independent house."
+      expect: {extracted: {property_owned: true}}
+    - customer: "Bill nelaki aaru vleu vastundi."
+    - customer: "Daba undi, place chaalu."
+  expect:
+    service: RESIDENTIAL_SOLAR
+
+# --- PM Surya Ghar (MVP §13) ---------------------------------------------
+
+- id: psg-te-by-name
+  description: Customer names the scheme
+  language: te-IN
+  dialect: telangana
+  service: PM_SURYA_GHAR
+  tags: [pm-surya-ghar, subsidy]
+  turns:
+    - customer: "PM Surya Ghar scheme కింద పెట్టించుకోవాలి."
+    - customer: "సొంత ఇల్లు, domestic connection."
+      expect: {extracted: {property_owned: true}}
+    - customer: "బిల్లు నెలకి మూడు వేలు."
+      expect: {extracted: {monthly_bill: 3000}}
+    - customer: "Subsidy ఎలా వస్తుంది?"
+      expect: {extracted: {subsidy_interest: true}}
+  expect:
+    service: PM_SURYA_GHAR
+
+- id: psg-te-free-electricity
+  description: >
+    Customer has heard of the scheme as "free electricity". The AI must not
+    confirm a figure — the subsidy comes from the solar engine and approved
+    knowledge, never from the model (CLAUDE.md rule 1).
+  language: te-IN
+  dialect: andhra
+  service: PM_SURYA_GHAR
+  tags: [pm-surya-ghar, subsidy, knowledge]
+  turns:
+    - customer: "Free current వస్తుందని TV లో చెప్పారు, నిజమేనా?"
+  expect:
+    service: PM_SURYA_GHAR
+
+- id: psg-en-documents
+  description: Document question for the scheme
+  language: en-IN
+  dialect: english
+  service: PM_SURYA_GHAR
+  tags: [pm-surya-ghar, documents]
+  turns:
+    - customer: "For the PM Surya Ghar subsidy, what documents do I need?"
+  expect:
+    service: PM_SURYA_GHAR
+
+- id: psg-mixed-eligibility
+  description: Eligibility question, code-mixed
+  language: mixed
+  dialect: mixed
+  service: PM_SURYA_GHAR
+  tags: [pm-surya-ghar, code-mixed]
+  turns:
+    - customer: "నాకు eligible అవుతానా? Own house ఉంది, bill 2500."
+      expect: {extracted: {property_owned: true, monthly_bill: 2500}}
+  expect:
+    service: PM_SURYA_GHAR

@@ -23,6 +23,7 @@ from backend.ai.base import (
 )
 from backend.ai.factory import get_llm_provider, get_speech_provider, get_voice_provider
 from backend.ai.models import Conversation, ConversationState, ConversationTurn, Speaker
+from backend.ai.numbers import normalise_extracted
 from backend.ai.prompts import SAFE_FALLBACK_REPLY, build_system_prompt, opening_line
 from backend.ai.qualification import is_sufficient, missing_fields
 from backend.calls.models import CallAttempt, Disposition
@@ -168,6 +169,10 @@ def handle_turn(
     if decision.service is not None:
         conversation.service = decision.service
     if decision.extracted:
+        # A bill given as "ఆరు వేలు" has to reach scoring as 6000 (MVP §37);
+        # the comparison there fails closed, so an unread figure would cost
+        # the customer their points silently.
+        decision.extracted = normalise_extracted(decision.extracted)
         # Never let a later turn blank out a value already given.
         merged = dict(conversation.collected or {})
         merged.update({k: v for k, v in decision.extracted.items() if v not in (None, "")})

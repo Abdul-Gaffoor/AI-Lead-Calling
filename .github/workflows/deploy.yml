@@ -30,6 +30,17 @@ jobs:
       - name: Run test suite
         run: python -m pytest -q
 
+      # The deterministic half of the MVP §37 corpus already runs above as
+      # tests/telugu. This prints the §38 measures into the build log, so
+      # the accuracy and latency numbers are visible per commit rather than
+      # only when somebody runs the command by hand. It needs no AI
+      # provider and makes no network call.
+      - name: Telugu evaluation (MVP §37)
+        env:
+          DATABASE_URL: "sqlite://"
+          JWT_SECRET: "ci-evaluation-secret-0123456789abcdef"
+        run: python -m backend.cli evaluate
+
   migrations:
     name: Verify migrations on PostgreSQL
     runs-on: ubuntu-latest

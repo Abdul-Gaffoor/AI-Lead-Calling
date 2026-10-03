@@ -1,0 +1,250 @@
+# Opt-out (MVP §30, CLAUDE.md rule 3)
+#
+# The deterministic cases below contain a phrase from OPT_OUT_PHRASES in
+# backend/ai/conversation.py, so suppression does not depend on the model.
+# These must pass at 100%: a missed opt-out is a compliance breach, not a
+# quality problem.
+#
+# The model-graded cases at the bottom are real phrasings that the
+# deterministic list does NOT cover. They pass only if the LLM catches them.
+# They are here deliberately, to keep the size of that gap visible.
+
+- id: optout-te-dont-call-again
+  description: The canonical Telugu opt-out from the MVP
+  language: te-IN
+  dialect: telangana
+  deterministic: true
+  tags: [opt-out, compliance]
+  turns:
+    - customer: "నాకు మళ్లీ call చేయకండి."
+  expect:
+    intent: OPT_OUT
+    disposition: DO_NOT_CALL
+    suppressed: true
+
+- id: optout-te-plain
+  description: Opt-out without the word "again"
+  language: te-IN
+  dialect: telangana
+  deterministic: true
+  tags: [opt-out, compliance]
+  turns:
+    - customer: "ఇక call చేయకండి."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-te-phone
+  description: '"ఫోన్ చేయకండి" rather than the English loanword'
+  language: te-IN
+  dialect: andhra
+  deterministic: true
+  tags: [opt-out, compliance]
+  turns:
+    - customer: "దయచేసి ఫోన్ చేయకండి."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-te-cheyyavaddu
+  description: '"చేయవద్దు" — do not do it'
+  language: te-IN
+  dialect: andhra
+  deterministic: true
+  tags: [opt-out, compliance]
+  turns:
+    - customer: "ఇలాంటి calls చేయవద్దు."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-translit-cheyyakandi
+  description: Romanised Telugu, which is what some STT engines return
+  language: te-IN
+  dialect: mixed
+  deterministic: true
+  tags: [opt-out, compliance, transliteration]
+  turns:
+    - customer: "Naaku call cheyyakandi."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-translit-cheyyaku
+  description: Informal romanised form
+  language: te-IN
+  dialect: mixed
+  deterministic: true
+  tags: [opt-out, compliance, transliteration]
+  turns:
+    - customer: "Inka call cheyyaku bro."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-en-dont-call
+  description: Plain English opt-out
+  language: en-IN
+  dialect: english
+  deterministic: true
+  tags: [opt-out, compliance]
+  turns:
+    - customer: "Please don't call me."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-en-do-not-call
+  description: Expanded form
+  language: en-IN
+  dialect: english
+  deterministic: true
+  tags: [opt-out, compliance]
+  turns:
+    - customer: "Do not call this number again."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-en-stop-calling
+  description: Irritated customer
+  language: en-IN
+  dialect: english
+  deterministic: true
+  tags: [opt-out, compliance]
+  turns:
+    - customer: "Stop calling me, I have told you people before."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-en-remove-number
+  description: Asking to be removed from the list
+  language: en-IN
+  dialect: english
+  deterministic: true
+  tags: [opt-out, compliance]
+  turns:
+    - customer: "Remove my number from your database."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-mid-conversation
+  description: Opt-out after the customer has already answered questions
+  language: te-IN
+  dialect: telangana
+  deterministic: true
+  tags: [opt-out, compliance]
+  turns:
+    - customer: "చెప్పండి, ఏంటి విషయం?"
+    - customer: "నెలకి 4000 బిల్లు వస్తుంది."
+    - customer: "వద్దు, ఇక call చేయకండి."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-after-interest
+  description: Opt-out overrides interest expressed earlier in the same call
+  language: mixed
+  dialect: mixed
+  deterministic: true
+  tags: [opt-out, compliance, topic-change]
+  turns:
+    - customer: "Solar గురించి చెప్పండి."
+    - customer: "Actually don't call me, నాకు interest లేదు."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+# ---------------------------------------------------------------------------
+# Below here: realistic opt-outs the deterministic list does not match.
+# These need the model. Every failure is a phrase worth adding to
+# OPT_OUT_PHRASES — that is the point of keeping them.
+# ---------------------------------------------------------------------------
+
+- id: optout-te-disturb
+  description: '"Don''t disturb me" — common, and not in the phrase list'
+  language: te-IN
+  dialect: telangana
+  tags: [opt-out, compliance, coverage-gap]
+  turns:
+    - customer: "నన్ను disturb చేయకండి."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-te-no-need
+  description: Firm refusal without the word "call"
+  language: te-IN
+  dialect: andhra
+  tags: [opt-out, compliance, coverage-gap]
+  turns:
+    - customer: "నాకు అవసరం లేదు, ఇక ఎప్పుడూ contact చేయవద్దు."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-en-unsubscribe
+  description: Customer uses the word from marketing email
+  language: en-IN
+  dialect: english
+  tags: [opt-out, compliance, coverage-gap]
+  turns:
+    - customer: "Unsubscribe me from this."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: optout-en-legal-threat
+  description: Escalated — must suppress, not transfer to sales
+  language: en-IN
+  dialect: english
+  tags: [opt-out, compliance, coverage-gap]
+  turns:
+    - customer: "I will complain to TRAI if you people ring me once more."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+- id: notinterested-is-not-optout
+  description: >
+    "Not interested" is NOT an opt-out — it must not suppress the number.
+    This case exists to catch an over-eager matcher.
+  language: te-IN
+  dialect: telangana
+  deterministic: true
+  tags: [opt-out, compliance, negative]
+  turns:
+    - customer: "ప్రస్తుతం నాకు interest లేదు, thanks."
+  expect:
+    # Only the suppression is asserted deterministically. Which intent this
+    # lands on is the model's call; that it must NOT reach the DNC list is
+    # the orchestrator's.
+    suppressed: false
+
+- id: busy-is-not-suppressed
+  description: >
+    "Call me later" contains the word "call" but is not an opt-out. That it
+    must not reach the DNC list is the orchestrator's guarantee, so this
+    half is deterministic.
+  language: te-IN
+  dialect: telangana
+  deterministic: true
+  tags: [opt-out, compliance, negative]
+  turns:
+    - customer: "ఇప్పుడు busy గా ఉన్నాను, రేపు call చేయండి."
+  expect:
+    suppressed: false
+
+- id: busy-is-a-callback
+  description: >
+    The other half: recognising it as a callback request rather than a
+    refusal is the model's judgement, so this is graded, not guaranteed.
+  language: te-IN
+  dialect: telangana
+  tags: [opt-out, negative, callback]
+  turns:
+    - customer: "ఇప్పుడు busy గా ఉన్నాను, రేపు call చేయండి."
+  expect:
+    intent: CALLBACK_REQUESTED

@@ -1,0 +1,177 @@
+# Commercial (§14), industrial (§15), agriculture (§16) and ground-mounted
+#
+# MVP §15: "High-value industrial leads should automatically route to a
+# senior executive/engineer." Several of these check that the AI does not
+# try to qualify a project it has no business qualifying.
+
+- id: com-te-shop
+  description: Small commercial premises
+  language: te-IN
+  dialect: telangana
+  service: COMMERCIAL_SOLAR
+  tags: [commercial]
+  turns:
+    - customer: "మాది shop, commercial connection."
+    - customer: "నెలకి నలభై వేలు బిల్లు."
+      expect: {extracted: {monthly_bill: 40000}}
+    - customer: "Building మాదే, terrace ఖాళీగా ఉంది."
+    - customer: "నేనే owner, నేనే decide చేస్తాను."
+      expect: {extracted: {decision_maker: true}}
+  expect:
+    service: COMMERCIAL_SOLAR
+
+- id: com-en-function-hall
+  description: Function hall, seasonal load
+  language: en-IN
+  dialect: english
+  service: COMMERCIAL_SOLAR
+  tags: [commercial]
+  turns:
+    - customer: "We have a function hall in Kukatpally."
+    - customer: "Bill runs about 1.5 lakh a month in season."
+      expect: {extracted: {monthly_bill: 150000}}
+    - customer: "The building is leased but we have a long-term agreement."
+      expect: {extracted: {premises_owned: false}}
+  expect:
+    service: COMMERCIAL_SOLAR
+
+- id: com-mixed-hospital
+  description: Hospital, decision by committee
+  language: mixed
+  dialect: mixed
+  service: COMMERCIAL_SOLAR
+  tags: [commercial, code-mixed, decision-maker]
+  turns:
+    - customer: "మాది hospital, Nizamabad లో."
+    - customer: "Monthly bill రెండు లక్షలు."
+      expect: {extracted: {monthly_bill: 200000}}
+    - customer: "Management committee decide చేయాలి, నేను కాదు."
+      expect: {extracted: {decision_maker: false}}
+  expect:
+    service: COMMERCIAL_SOLAR
+
+- id: com-te-school
+  description: School with a long payback tolerance
+  language: te-IN
+  dialect: andhra
+  service: COMMERCIAL_SOLAR
+  tags: [commercial]
+  turns:
+    - customer: "మాది school. Bill నెలకి డెబ్బై వేలు."
+      expect: {extracted: {monthly_bill: 70000}}
+    - customer: "Correspondent గారు నేనే."
+      expect: {extracted: {decision_maker: true}}
+  expect:
+    service: COMMERCIAL_SOLAR
+
+- id: ind-en-spinning-mill
+  description: Large industrial — should escalate, not be qualified by the AI
+  language: en-IN
+  dialect: english
+  service: INDUSTRIAL_SOLAR
+  tags: [industrial, escalation]
+  turns:
+    - customer: "We are a spinning mill near Warangal, HT connection."
+      expect: {extracted: {connection_type: "HT"}}
+    - customer: "Monthly bill is six lakh. We want to look at 500 kW."
+      expect: {extracted: {monthly_bill: 600000}}
+  expect:
+    service: INDUSTRIAL_SOLAR
+    intent: HUMAN_REQUEST
+
+- id: ind-te-rice-mill
+  description: Industrial enquiry in Telugu
+  language: te-IN
+  dialect: telangana
+  service: INDUSTRIAL_SOLAR
+  tags: [industrial]
+  turns:
+    - customer: "మాది rice mill, Nalgonda దగ్గర."
+    - customer: "మూడు shifts నడుస్తుంది, బిల్లు నెలకి మూడు లక్షలు."
+      expect: {extracted: {monthly_bill: 300000}}
+    - customer: "Shed మీద చాలా place ఉంది."
+  expect:
+    service: INDUSTRIAL_SOLAR
+
+- id: ind-mixed-cold-storage
+  description: Cold storage, continuous load
+  language: mixed
+  dialect: mixed
+  service: INDUSTRIAL_SOLAR
+  tags: [industrial, code-mixed]
+  turns:
+    - customer: "Cold storage unit, 24 hours running."
+    - customer: "Bill నెలకి నాలుగు లక్షలు అవుతుంది. DG కూడా వాడతాము."
+      expect: {extracted: {monthly_bill: 400000}}
+  expect:
+    service: INDUSTRIAL_SOLAR
+
+- id: agri-te-pump
+  description: Agricultural pump (MVP §16)
+  language: te-IN
+  dialect: telangana
+  service: AGRICULTURE_SOLAR
+  tags: [agriculture]
+  turns:
+    - customer: "మాది వ్యవసాయం. Pump కి solar పెట్టించుకోవాలి."
+    - customer: "ఊరు జనగాం, మండలం కూడా జనగాం."
+      expect: {extracted: {village: "జనగాం"}}
+    - customer: "ఐదు ఎకరాలు ఉంది, మాదే భూమి."
+      expect: {extracted: {land_area: 5, land_ownership: true}}
+    - customer: "ఐదు హెచ్ పి motor."
+      expect: {extracted: {pump_hp: 5}}
+  expect:
+    service: AGRICULTURE_SOLAR
+
+- id: agri-te-borewell
+  description: Borewell with unreliable grid supply
+  language: te-IN
+  dialect: andhra
+  service: AGRICULTURE_SOLAR
+  tags: [agriculture]
+  turns:
+    - customer: "బోరు ఉంది కానీ కరెంటు సరిగ్గా రాదు."
+    - customer: "రెండున్నర ఎకరాలు."
+      expect: {extracted: {land_area: 2.5}}
+    - customer: "మూడు హెచ్ పి pump."
+      expect: {extracted: {pump_hp: 3}}
+  expect:
+    service: AGRICULTURE_SOLAR
+
+- id: agri-te-scheme
+  description: Farmer asking about a government scheme
+  language: te-IN
+  dialect: telangana
+  service: AGRICULTURE_SOLAR
+  tags: [agriculture, subsidy, knowledge]
+  turns:
+    - customer: "Government scheme లో solar pump వస్తుందా?"
+      expect: {extracted: {scheme_interest: true}}
+  expect:
+    service: AGRICULTURE_SOLAR
+
+- id: ground-te-open-land
+  description: Ground-mounted on open land
+  language: te-IN
+  dialect: telangana
+  service: GROUND_MOUNTED_SOLAR
+  tags: [ground-mounted]
+  turns:
+    - customer: "ఖాళీ స్థలం ఉంది, దాని మీద solar పెట్టొచ్చా?"
+    - customer: "ఒక ఎకరం, మాదే."
+      expect: {extracted: {land_area: 1, land_ownership: true}}
+  expect:
+    service: GROUND_MOUNTED_SOLAR
+
+- id: ground-en-farmhouse
+  description: Farmhouse, roof unsuitable so ground mount
+  language: en-IN
+  dialect: english
+  service: GROUND_MOUNTED_SOLAR
+  tags: [ground-mounted]
+  turns:
+    - customer: "Farmhouse roof is sloping tiles, can we put panels on the ground instead?"
+    - customer: "There's about two acres of open land."
+      expect: {extracted: {land_area: 2}}
+  expect:
+    service: GROUND_MOUNTED_SOLAR

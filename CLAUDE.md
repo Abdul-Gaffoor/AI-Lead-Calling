@@ -46,12 +46,14 @@ Daily CSV/XLSX + website API
 ## Commands
 
 ```bash
-.venv/bin/python -m pytest -q                              # 201 tests
+.venv/bin/python -m pytest -q                              # 319 tests
 .venv/bin/uvicorn backend.main:app --reload                # API + console at /
 .venv/bin/alembic -c database/alembic.ini upgrade head     # migrations
 .venv/bin/celery -A workers.celery_app worker --beat       # dispatcher (needs Redis)
 .venv/bin/python -m backend.cli create-admin --email x@y.com --password ... --name "..."
 .venv/bin/python -m backend.cli load-knowledge             # knowledge/ -> database
+.venv/bin/python -m backend.cli evaluate                   # MVP §37 corpus, §38 measures
+.venv/bin/python -m backend.cli evaluate --all             # + model-graded (costs money)
 ```
 
 ## Rules this codebase holds to
@@ -77,7 +79,19 @@ These are product requirements, not style preferences. Breaking them is a bug.
 7. **Engineering constants need sign-off.** `backend/solar_engine/constants.py`
    values, especially subsidy slabs, are documented placeholders until Swaraj
    engineering approves them.
-8. **Only approved knowledge reaches a customer.** Documents in
+8. **Spoken quantities are read before they are stored.** MVP §37 requires
+   "ఆరు వేలు", "6000" and "six thousand" to mean the same thing.
+   `backend/ai/numbers.py` does that reading and the orchestrator applies it
+   to every numeric field. This is not politeness: scoring compares
+   `monthly_bill` with `float()` and treats a failure as "no", so an unread
+   figure costs the customer their points with no error anywhere.
+9. **The evaluation corpus is the gate before real calls.** MVP §37 requires
+   100+ scripted tests and 50+ Telugu conversations to pass before a pilot.
+   They live in `evaluation/scenarios/` as reviewable YAML. The deterministic
+   half runs in CI for free; the model-graded half needs a real provider.
+   Compliance scenarios must be deterministic — a test asserts it, because
+   rule 3 means opt-out cannot be left to the model.
+10. **Only approved knowledge reaches a customer.** Documents in
    `backend/knowledge/` are retrieved on a call only once a person has approved
    them, and editing one withdraws that approval. The content in `knowledge/`
    is drafted from the MVP document, not Swaraj's own material, so it ships

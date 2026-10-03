@@ -1,0 +1,472 @@
+# Numbers and units (MVP §37)
+#
+# MVP §37 names three forms of the same answer and requires all of them to
+# be understood:
+#
+#     "ఆరు వేలు"   "6000"   "six thousand"
+#
+# These use `kind: number`: they assert that a spoken quantity reads as a
+# figure, without running a conversation. They are deterministic and free,
+# and a Telugu speaker can add cases here without touching Python.
+#
+# This matters more than it looks. Scoring compares monthly_bill against a
+# threshold and treats an unreadable value as "no" rather than erroring, so
+# a bill the system cannot read costs the customer their points in silence.
+
+# --- The three forms §37 names -------------------------------------------
+
+- id: num-six-thousand-telugu
+  kind: number
+  description: §37's first form — Telugu words
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, bill]
+  spoken: "ఆరు వేలు"
+  expect: 6000
+
+- id: num-six-thousand-digits
+  kind: number
+  description: §37's second form — digits
+  language: en-IN
+  dialect: english
+  tags: [numbers, bill]
+  spoken: "6000"
+  expect: 6000
+
+- id: num-six-thousand-english
+  kind: number
+  description: §37's third form — English words
+  language: en-IN
+  dialect: english
+  tags: [numbers, bill]
+  spoken: "six thousand"
+  expect: 6000
+
+# --- The same figure, as people actually say it ---------------------------
+
+- id: num-six-thousand-mixed-digit
+  kind: number
+  description: Digit with a Telugu scale word
+  language: mixed
+  dialect: mixed
+  tags: [numbers, bill, code-mixed]
+  spoken: "6 వేలు"
+  expect: 6000
+
+- id: num-six-thousand-mixed-word
+  kind: number
+  description: Telugu unit with an English scale word
+  language: mixed
+  dialect: mixed
+  tags: [numbers, bill, code-mixed]
+  spoken: "ఆరు thousand"
+  expect: 6000
+
+- id: num-six-thousand-k
+  kind: number
+  description: The "6k" shorthand
+  language: en-IN
+  dialect: english
+  tags: [numbers, bill]
+  spoken: "6k"
+  expect: 6000
+
+- id: num-six-thousand-rupee-sign
+  kind: number
+  description: Currency symbol and thousands separator
+  language: en-IN
+  dialect: english
+  tags: [numbers, bill, currency]
+  spoken: "₹6,000"
+  expect: 6000
+
+- id: num-six-thousand-rs
+  kind: number
+  description: An "Rs" prefix
+  language: en-IN
+  dialect: english
+  tags: [numbers, bill, currency]
+  spoken: "Rs 6000"
+  expect: 6000
+
+- id: num-six-thousand-rupees-suffix
+  kind: number
+  description: Currency word after the figure
+  language: en-IN
+  dialect: english
+  tags: [numbers, bill, currency]
+  spoken: "6000 rupees"
+  expect: 6000
+
+- id: num-six-thousand-telugu-currency
+  kind: number
+  description: Telugu currency word
+  language: te-IN
+  dialect: andhra
+  tags: [numbers, bill, currency]
+  spoken: "ఆరు వేల రూపాయలు"
+  expect: 6000
+
+- id: num-in-sentence-telugu
+  kind: number
+  description: Figure inside a full sentence, as STT returns it
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, bill, sentence]
+  spoken: "నెలకి ఆరు వేలు వస్తుంది"
+  expect: 6000
+
+- id: num-in-sentence-english
+  kind: number
+  description: Hedged English, as people quote a bill
+  language: en-IN
+  dialect: english
+  tags: [numbers, bill, sentence]
+  spoken: "approximately 15,000 per month"
+  expect: 15000
+
+# --- Other bill amounts ---------------------------------------------------
+
+- id: num-telugu-four-thousand
+  kind: number
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, bill]
+  spoken: "నాలుగు వేలు"
+  expect: 4000
+
+- id: num-telugu-ten-thousand
+  kind: number
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, bill]
+  spoken: "పది వేలు"
+  expect: 10000
+
+- id: num-telugu-twelve-thousand
+  kind: number
+  language: te-IN
+  dialect: andhra
+  tags: [numbers, bill]
+  spoken: "పన్నెండు వేలు"
+  expect: 12000
+
+- id: num-telugu-fifteen-thousand
+  kind: number
+  language: te-IN
+  dialect: andhra
+  tags: [numbers, bill]
+  spoken: "పదిహేను వేలు"
+  expect: 15000
+
+- id: num-telugu-twenty-five-thousand
+  kind: number
+  description: Compound unit before the scale
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, bill]
+  spoken: "ఇరవై ఐదు వేలు"
+  expect: 25000
+
+- id: num-telugu-thirty-thousand
+  kind: number
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, bill]
+  spoken: "ముప్పై వేలు"
+  expect: 30000
+
+- id: num-english-twenty-five-thousand
+  kind: number
+  language: en-IN
+  dialect: english
+  tags: [numbers, bill]
+  spoken: "twenty five thousand"
+  expect: 25000
+
+- id: num-english-seven-five-hundred
+  kind: number
+  description: Two scales in one quantity
+  language: en-IN
+  dialect: english
+  tags: [numbers, bill]
+  spoken: "seven thousand five hundred"
+  expect: 7500
+
+- id: num-telugu-seven-five-hundred
+  kind: number
+  language: te-IN
+  dialect: andhra
+  tags: [numbers, bill]
+  spoken: "ఏడు వేల ఐదు వందలు"
+  expect: 7500
+
+# --- Lakhs and crores — commercial and industrial bills -------------------
+
+- id: num-telugu-one-lakh
+  kind: number
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, bill, lakh, commercial]
+  spoken: "ఒక లక్ష"
+  expect: 100000
+
+- id: num-telugu-two-lakh
+  kind: number
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, bill, lakh, commercial]
+  spoken: "రెండు లక్షలు"
+  expect: 200000
+
+- id: num-telugu-six-lakh
+  kind: number
+  description: The industrial bill from MVP §26
+  language: te-IN
+  dialect: andhra
+  tags: [numbers, bill, lakh, industrial]
+  spoken: "ఆరు లక్షలు"
+  expect: 600000
+
+- id: num-english-one-point-five-lakh
+  kind: number
+  description: Decimal lakh, very common in Indian English
+  language: en-IN
+  dialect: english
+  tags: [numbers, bill, lakh, commercial]
+  spoken: "1.5 lakh"
+  expect: 150000
+
+- id: num-english-lakhs-plural
+  kind: number
+  language: en-IN
+  dialect: english
+  tags: [numbers, bill, lakh, commercial]
+  spoken: "3 lakhs per month"
+  expect: 300000
+
+- id: num-english-two-lakh-fifty
+  kind: number
+  description: Compound lakh and thousand
+  language: en-IN
+  dialect: english
+  tags: [numbers, bill, lakh]
+  spoken: "two lakh fifty thousand"
+  expect: 250000
+
+- id: num-telugu-one-crore
+  kind: number
+  description: Project value rather than a bill
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, crore, industrial]
+  spoken: "ఒక కోటి"
+  expect: 10000000
+
+# --- Telugu digits --------------------------------------------------------
+
+- id: num-telugu-numerals-6000
+  kind: number
+  description: Telugu numerals, a separate Unicode block from ASCII
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, telugu-digits]
+  spoken: "౬౦౦౦"
+  expect: 6000
+
+- id: num-telugu-numerals-12500
+  kind: number
+  language: te-IN
+  dialect: andhra
+  tags: [numbers, telugu-digits]
+  spoken: "౧౨౫౦౦"
+  expect: 12500
+
+# --- Units of consumption (MVP §12) ---------------------------------------
+
+- id: num-units-digits
+  kind: number
+  description: Monthly consumption in units
+  language: en-IN
+  dialect: english
+  tags: [numbers, units]
+  spoken: "620 units"
+  expect: 620
+
+- id: num-units-telugu
+  kind: number
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, units]
+  spoken: "ఆరు వందల యూనిట్లు"
+  expect: 600
+
+- id: num-units-sentence
+  kind: number
+  language: mixed
+  dialect: mixed
+  tags: [numbers, units, code-mixed]
+  spoken: "నెలకి 450 units వాడతాము"
+  expect: 450
+
+# --- System size in kW (MVP §19) ------------------------------------------
+
+- id: num-kw-digits
+  kind: number
+  language: en-IN
+  dialect: english
+  tags: [numbers, kw]
+  spoken: "5 kW"
+  expect: 5
+
+- id: num-kw-telugu-word
+  kind: number
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, kw]
+  spoken: "ఐదు కిలోవాట్"
+  expect: 5
+
+- id: num-kw-decimal
+  kind: number
+  description: Fractional system size
+  language: en-IN
+  dialect: english
+  tags: [numbers, kw]
+  spoken: "3.3 kWp"
+  expect: 3.3
+
+- id: num-kw-large
+  kind: number
+  language: en-IN
+  dialect: english
+  tags: [numbers, kw, industrial]
+  spoken: "500 kilowatt"
+  expect: 500
+
+# --- Area (MVP §12, §14) --------------------------------------------------
+
+- id: num-area-sqft
+  kind: number
+  language: en-IN
+  dialect: english
+  tags: [numbers, area]
+  spoken: "1200 sq ft"
+  expect: 1200
+
+- id: num-area-telugu
+  kind: number
+  language: te-IN
+  dialect: andhra
+  tags: [numbers, area]
+  spoken: "1200 చదరపు అడుగులు"
+  expect: 1200
+
+- id: num-area-acres
+  kind: number
+  description: Agriculture land, in acres (MVP §16)
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, area, agriculture]
+  spoken: "రెండు ఎకరాలు"
+  expect: 2
+
+- id: num-area-acres-decimal
+  kind: number
+  language: en-IN
+  dialect: english
+  tags: [numbers, area, agriculture]
+  spoken: "2.5 acres"
+  expect: 2.5
+
+# --- Pump horsepower (MVP §16) --------------------------------------------
+
+- id: num-hp-digits
+  kind: number
+  language: en-IN
+  dialect: english
+  tags: [numbers, hp, agriculture]
+  spoken: "5 HP"
+  expect: 5
+
+- id: num-hp-telugu
+  kind: number
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, hp, agriculture]
+  spoken: "మూడు హెచ్ పి"
+  expect: 3
+
+# --- Things that are not quantities, and must not be guessed at -----------
+
+- id: num-dont-know-english
+  kind: number
+  description: An unknown answer must read as nothing, not as a number
+  language: en-IN
+  dialect: english
+  tags: [numbers, negative]
+  spoken: "I don't know"
+  expect: null
+
+- id: num-dont-know-telugu
+  kind: number
+  language: te-IN
+  dialect: telangana
+  tags: [numbers, negative]
+  spoken: "తెలియదు"
+  expect: null
+
+- id: num-yes
+  kind: number
+  description: A yes/no answer is not a quantity
+  language: en-IN
+  dialect: english
+  tags: [numbers, negative]
+  spoken: "yes"
+  expect: null
+
+- id: num-empty
+  kind: number
+  language: en-IN
+  dialect: english
+  tags: [numbers, negative]
+  spoken: ""
+  expect: null
+
+- id: num-two-answers-comma
+  kind: number
+  description: >
+    Two figures must not be added together. "6000, 7000" is a customer
+    correcting themselves, not thirteen thousand.
+  language: en-IN
+  dialect: english
+  tags: [numbers, negative, ambiguity]
+  spoken: "6000, 7000"
+  expect: 6000
+
+- id: num-two-answers-space
+  kind: number
+  language: en-IN
+  dialect: english
+  tags: [numbers, negative, ambiguity]
+  spoken: "6000 7000"
+  expect: 6000
+
+- id: num-pincode-not-money
+  kind: number
+  description: >
+    A PIN code is six digits and must read as itself, not be mistaken for a
+    scaled quantity (MVP §37 lists PIN codes).
+  language: en-IN
+  dialect: english
+  tags: [numbers, pincode]
+  spoken: "500049"
+  expect: 500049
+
+- id: num-pincode-telugu-sentence
+  kind: number
+  language: mixed
+  dialect: mixed
+  tags: [numbers, pincode, code-mixed]
+  spoken: "మా pincode 500072"
+  expect: 500072

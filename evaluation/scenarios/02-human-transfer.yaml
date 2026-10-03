@@ -1,0 +1,135 @@
+# Human transfer (MVP §23)
+#
+# "AI detects HUMAN_REQUEST" has a deterministic backstop in
+# HUMAN_REQUEST_PHRASES, same as opt-out. An explicit request for a person
+# must not be left to the model.
+#
+# MVP §23 also lists escalations the model has to judge — price negotiation,
+# large commercial, industrial, technical questions, complaints, AI
+# uncertainty. Those are model-graded here.
+
+- id: human-te-sales-person
+  description: The exact phrasing from MVP §23
+  language: te-IN
+  dialect: telangana
+  deterministic: true
+  tags: [human-transfer]
+  turns:
+    - customer: "Sales person tho maatladali."
+  expect:
+    intent: HUMAN_REQUEST
+    disposition: HUMAN_TRANSFER
+
+- id: human-te-manishi
+  description: '"మనిషితో" — with a person'
+  language: te-IN
+  dialect: telangana
+  deterministic: true
+  tags: [human-transfer]
+  turns:
+    - customer: "నేను మనిషితో మాట్లాడాలి."
+  expect:
+    intent: HUMAN_REQUEST
+
+- id: human-translit-manishi
+  description: Romanised
+  language: te-IN
+  dialect: mixed
+  deterministic: true
+  tags: [human-transfer, transliteration]
+  turns:
+    - customer: "Manishi tho matladali, robot tho kaadu."
+  expect:
+    intent: HUMAN_REQUEST
+
+- id: human-en-talk-to-human
+  description: Plain English
+  language: en-IN
+  dialect: english
+  deterministic: true
+  tags: [human-transfer]
+  turns:
+    - customer: "Can I talk to human please?"
+  expect:
+    intent: HUMAN_REQUEST
+
+- id: human-en-speak-to-person
+  description: Polite form
+  language: en-IN
+  dialect: english
+  deterministic: true
+  tags: [human-transfer]
+  turns:
+    - customer: "I would like to speak to a person."
+  expect:
+    intent: HUMAN_REQUEST
+
+- id: human-mixed-after-qualifying
+  description: Transfer requested after the customer has given details
+  language: mixed
+  dialect: mixed
+  deterministic: true
+  tags: [human-transfer, topic-change]
+  turns:
+    - customer: "మా ఇల్లు own house, roof ఉంది."
+    - customer: "Price గురించి sales person tho maatladali."
+  expect:
+    intent: HUMAN_REQUEST
+
+- id: human-opt-out-wins
+  description: >
+    Both a transfer request and an opt-out in one utterance. Opt-out must
+    win — the orchestrator checks it first, and suppression outranks a
+    handoff.
+  language: mixed
+  dialect: mixed
+  deterministic: true
+  tags: [human-transfer, opt-out, compliance, precedence]
+  turns:
+    - customer: "Sales person tho matladatam ledu, don't call me again."
+  expect:
+    intent: OPT_OUT
+    suppressed: true
+
+# --- Escalations that need the model's judgement (MVP §23) ---------------
+
+- id: human-price-negotiation
+  description: Price negotiation should escalate
+  language: te-IN
+  dialect: telangana
+  tags: [human-transfer, escalation]
+  turns:
+    - customer: "నెలకి 8000 బిల్లు. Rate ఎంత తగ్గిస్తారు? Discount ఇస్తారా?"
+  expect:
+    intent: HUMAN_REQUEST
+
+- id: human-industrial-scale
+  description: Industrial enquiry should reach an engineer, not be qualified by the AI
+  language: en-IN
+  dialect: english
+  service: INDUSTRIAL_SOLAR
+  tags: [human-transfer, escalation, industrial]
+  turns:
+    - customer: "We run a spinning mill, HT connection, 6 lakh a month. I need to discuss a 500 kW plant."
+  expect:
+    intent: HUMAN_REQUEST
+
+- id: human-technical-question
+  description: Engineering question beyond the approved knowledge base
+  language: en-IN
+  dialect: english
+  tags: [human-transfer, escalation, technical]
+  turns:
+    - customer: "What is the temperature coefficient on your bifacial modules and the degradation curve after year ten?"
+  expect:
+    intent: HUMAN_REQUEST
+
+- id: human-complaint
+  description: A complaint must go to a person, not be sold to
+  language: te-IN
+  dialect: andhra
+  tags: [human-transfer, escalation, complaint]
+  turns:
+    - customer: "మీ company వాళ్ళు installation సరిగ్గా చేయలేదు. నేను complaint చేయాలి."
+  expect:
+    intent: HUMAN_REQUEST

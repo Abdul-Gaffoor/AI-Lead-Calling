@@ -4,9 +4,11 @@ Usage:
     python -m backend.cli create-admin --email admin@swarajsolar.com \
         --password <password> --name "Platform Admin"
     python -m backend.cli load-knowledge
+    python -m backend.cli evaluate [--all] [--json report.json]
 """
 
 import argparse
+import pathlib
 import sys
 
 from sqlalchemy import select
@@ -57,6 +59,32 @@ def load_knowledge() -> None:
               "until a curator approves them.")
 
 
+def evaluate(deterministic_only: bool, json_path: str | None) -> None:
+    """Run the MVP §37 corpus and print the §38 measures."""
+    import json
+
+    from backend.evaluation import build, load, render, run, to_dict
+    from backend.evaluation.sandbox import session_factory
+
+    scenarios = load()
+    # Never the configured database: the harness writes call records.
+    results = run(session_factory(), scenarios, deterministic_only=deterministic_only)
+    report = build(results)
+
+    print(render(report))
+
+    if json_path:
+        pathlib.Path(json_path).write_text(
+            json.dumps(to_dict(report), indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        print(f"  Written to {json_path}")
+
+    # A missed opt-out is a compliance breach, so it fails the command.
+    # Everything else is a measurement, not a verdict.
+    if not report.compliance_clean or report.errors:
+        raise SystemExit(1)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="backend.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -68,7 +96,20 @@ def main() -> None:
 
     sub.add_parser("load-knowledge", help="Load knowledge/ markdown into the database")
 
+    evaluation = sub.add_parser(
+        "evaluate", help="Run the Telugu evaluation corpus (MVP §37)"
+    )
+    evaluation.add_argument(
+        "--all",
+        action="store_true",
+        help="Include model-graded scenarios (needs a real LLM provider; costs money)",
+    )
+    evaluation.add_argument("--json", dest="json_path", help="Also write the report here")
+
     args = parser.parse_args()
+    if args.command == "evaluate":
+        evaluate(deterministic_only=not args.all, json_path=args.json_path)
+        return
     if args.command == "load-knowledge":
         load_knowledge()
         return

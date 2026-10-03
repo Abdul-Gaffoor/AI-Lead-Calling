@@ -1,0 +1,215 @@
+# Robustness (MVP §37)
+#
+# §37 asks for interruptions, background noise, the customer changing topic,
+# asking for a human and saying don't call. The last two have their own
+# files. These are the messy ones — a real call is not a clean transcript,
+# and STT output from a noisy line is worse than anything written here.
+
+- id: robust-disclosure-opens-call
+  description: >
+    Every call opens by saying it is an AI (MVP §8, CLAUDE.md rule 2). The
+    line is scripted, not model-generated, so this is deterministic.
+  language: te-IN
+  dialect: telangana
+  deterministic: true
+  tags: [disclosure, compliance]
+  turns: []
+  expect:
+    opening_contains: "AI"
+
+- id: robust-turn-limit
+  description: >
+    A phone call cannot go on forever. After MAX_CONVERSATION_TURNS the
+    orchestrator ends it regardless of what the model wants.
+  language: te-IN
+  dialect: telangana
+  deterministic: true
+  tags: [turn-limit]
+  turns:
+    # Comfortably past MAX_CONVERSATION_TURNS. A corpus test asserts this
+    # stays above the configured limit, so raising the setting says so
+    # rather than quietly turning this scenario into a no-op.
+    - customer: "ఊఁ"
+      repeat: 25
+  expect:
+    ended: true
+
+- id: robust-noise-fragment
+  description: Partial utterance from a bad line
+  language: te-IN
+  dialect: telangana
+  tags: [noise, stt]
+  turns:
+    - customer: "హలో... హలో... వినిపిస్తుందా?"
+    - customer: "ఇప్పుడు బాగుంది. చెప్పండి."
+  expect:
+    ended: false
+
+- id: robust-noise-garbled-bill
+  description: >
+    STT mangles the figure. The AI should ask again rather than record a
+    number it did not hear.
+  language: te-IN
+  dialect: telangana
+  tags: [noise, stt, numbers]
+  turns:
+    - customer: "బిల్లు నెలకి... [గల గల]... వేలు"
+  expect:
+    ended: false
+
+- id: robust-background-voices
+  description: Someone else talking in the room
+  language: te-IN
+  dialect: andhra
+  tags: [noise]
+  turns:
+    - customer: "ఒక్క నిమిషం... ఏంటే? ... సరే చెప్పండి సార్."
+  expect:
+    ended: false
+
+- id: robust-interruption-mid-question
+  description: Customer cuts in before the question finishes
+  language: te-IN
+  dialect: telangana
+  tags: [interruption]
+  turns:
+    - customer: "ఆగండి ఆగండి, ముందు price చెప్పండి."
+  expect:
+    ended: false
+
+- id: robust-topic-change-to-service
+  description: >
+    Starts as a sales call, turns out to be a service issue. The AI must
+    follow the customer rather than finish its script.
+  language: te-IN
+  dialect: telangana
+  tags: [topic-change]
+  turns:
+    - customer: "సొంత ఇల్లే."
+    - customer: "అసలు విషయం ఏంటంటే, ఇప్పటికే ఉన్న system పని చేయట్లేదు."
+  expect:
+    service: SOLAR_MAINTENANCE
+    intent: SERVICE_REQUEST
+
+- id: robust-topic-change-to-commercial
+  description: Residential lead turns out to be about their shop
+  language: mixed
+  dialect: mixed
+  tags: [topic-change]
+  turns:
+    - customer: "ఇంటికి కాదు, మా shop కి కావాలి."
+    - customer: "Commercial connection, bill 50000."
+      expect: {extracted: {monthly_bill: 50000}}
+  expect:
+    service: COMMERCIAL_SOLAR
+
+- id: robust-asks-who-is-this
+  description: Customer challenges the caller's identity
+  language: te-IN
+  dialect: telangana
+  tags: [disclosure, trust]
+  turns:
+    - customer: "మీరు ఎవరు? ఇది recording ఆ?"
+  expect:
+    ended: false
+
+- id: robust-suspects-fraud
+  description: Customer thinks it is a scam — must be handled, not pushed past
+  language: te-IN
+  dialect: andhra
+  tags: [trust]
+  turns:
+    - customer: "ఇదంతా మోసం కదా? నాకు ఎలా నమ్మకం?"
+  expect:
+    ended: false
+
+- id: robust-silence
+  description: Empty transcript — the customer said nothing audible
+  language: te-IN
+  dialect: telangana
+  tags: [noise, stt]
+  turns:
+    - customer: "..."
+  expect:
+    ended: false
+
+- id: robust-language-switch-mid-call
+  description: Starts in English, switches to Telugu
+  language: mixed
+  dialect: mixed
+  tags: [language-detection, code-mixed]
+  turns:
+    - customer: "Yes, tell me about the solar."
+    - customer: "ఒక్క నిమిషం, తెలుగులో చెప్పండి."
+  expect:
+    language: te-IN
+
+- id: robust-language-switch-to-english
+  description: Starts in Telugu, asks for English
+  language: mixed
+  dialect: mixed
+  tags: [language-detection]
+  turns:
+    - customer: "నమస్తే, చెప్పండి."
+    - customer: "Actually can you explain in English?"
+  expect:
+    language: en-IN
+
+- id: robust-very-long-answer
+  description: A rambling answer with the useful figure buried in it
+  language: te-IN
+  dialect: telangana
+  tags: [verbosity, numbers]
+  turns:
+    - customer: >
+        చూడండి సార్, మా ఇల్లు కట్టి పదేళ్ళు అయింది, అప్పుడు కరెంటు బిల్లు
+        చాలా తక్కువ వచ్చేది, ఇప్పుడు పిల్లలు పెద్దవాళ్ళు అయ్యారు, AC లు
+        పెట్టాము, అందుకే ఇప్పుడు నెలకి పన్నెండు వేలు వస్తుంది, అదే కష్టంగా
+        ఉంది.
+      expect: {extracted: {monthly_bill: 12000}}
+  expect:
+    ended: false
+
+- id: robust-one-word-answers
+  description: Customer giving minimal answers
+  language: te-IN
+  dialect: telangana
+  tags: [verbosity]
+  turns:
+    - customer: "ఊఁ"
+    - customer: "అవును"
+    - customer: "సొంతం"
+    - customer: "ఆరు వేలు"
+      expect: {extracted: {monthly_bill: 6000}}
+  expect:
+    ended: false
+
+- id: robust-asks-to-repeat
+  description: Customer did not catch what was said
+  language: te-IN
+  dialect: andhra
+  tags: [interruption]
+  turns:
+    - customer: "ఏమన్నారు? మళ్ళీ చెప్పండి."
+  expect:
+    ended: false
+
+- id: robust-child-answers
+  description: Someone other than the lead picks up
+  language: te-IN
+  dialect: telangana
+  tags: [wrong-person]
+  turns:
+    - customer: "నాన్న ఇంట్లో లేరు, సాయంత్రం call చేయండి."
+  expect:
+    intent: CALLBACK_REQUESTED
+
+- id: robust-driving
+  description: Customer cannot talk now
+  language: mixed
+  dialect: mixed
+  tags: [callback]
+  turns:
+    - customer: "Driving లో ఉన్నాను, తర్వాత మాట్లాడతాను."
+  expect:
+    intent: CALLBACK_REQUESTED

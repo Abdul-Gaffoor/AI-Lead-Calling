@@ -1,7 +1,7 @@
 # Handover — state of the platform
 
-Last updated: 2026-09-20 · 170 tests passing on SQLite and PostgreSQL
-· 6 migrations
+Last updated: 2026-10-03 · 319 tests passing on SQLite and PostgreSQL
+· 6 migrations · live at https://voice.wayfinderops.com
 
 ---
 
@@ -72,11 +72,36 @@ Everything below is implemented, tested and deployed.
 
 ---
 
+### Evaluation harness (MVP §37, §38)
+- `evaluation/scenarios/` — **138 scenarios**, 94 of them Telugu, covering the
+  four §37 dialect buckets, the number and unit forms §37 names, all ten
+  services, interruptions, noise, topic changes, human requests and opt-outs.
+  Plain YAML, so a Telugu speaker extends it without touching Python.
+- `python -m backend.cli evaluate` plays them through the **real** orchestrator
+  and reports the §38 measures: understanding accuracy, field capture,
+  classification accuracy, escalation accuracy, latency percentiles, and a
+  breakdown per dialect. `--json` for a dashboard or a trend line.
+- The **deterministic** half (73 scenarios) runs in CI on every push: opt-out,
+  human transfer, the AI disclosure, the turn limit and number reading are
+  orchestrator guarantees, so they need no AI provider and cost nothing. The
+  model-graded half (65) runs with `--all` against a real provider.
+- The harness always builds its own throwaway in-memory database. Running
+  `evaluate` on the production container cannot touch real data.
+- Found and fixed while building it: spoken quantities were never normalised,
+  so a customer answering "ఆరు వేలు" scored zero on the bill rule instead of
+  +15, silently. `backend/ai/numbers.py` now reads Telugu and English number
+  words, Telugu digits, lakh/crore scales and currency forms.
+
+---
+
 ## 2. What is NOT built
 
 | Gap | Why it matters |
 |---|---|
 | **Real-time SIP media streaming** | The conversation API is turn-based. Wire it when the telephony account exists. |
+| **Native Telugu review of the corpus** | The 94 Telugu scenarios were drafted from the MVP, not written by a Telugu speaker. Until somebody reviews them, the scores measure the plumbing, not the Telugu. |
+| **Security hardening (MVP §32)** | MFA, API rate limiting, PII masking and database backups are all absent. |
+| **Live transfer (MVP §23)** | `exotel.py` raises — the mechanism has to be configured on the Exotel account first. |
 
 ---
 
