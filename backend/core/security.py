@@ -18,11 +18,21 @@ def verify_password(password: str, hashed: str) -> bool:
     return pwd_context.verify(password, hashed)
 
 
-def create_access_token(subject: str, role: str) -> str:
+#: A normal session.
+SCOPE_FULL = "full"
+#: Issued to an administrator whose role requires MFA but who has not
+#: enrolled yet. It opens the enrolment endpoints and nothing else.
+#: Without it, turning MFA on for a role would lock out every account in
+#: that role, because the setup endpoint itself needs a token.
+SCOPE_MFA_ENROLMENT = "mfa_enrolment"
+
+
+def create_access_token(subject: str, role: str, scope: str = SCOPE_FULL) -> str:
     now = dt.datetime.now(dt.timezone.utc)
     payload = {
         "sub": subject,
         "role": role,
+        "scope": scope,
         "iat": now,
         "exp": now + dt.timedelta(minutes=settings.jwt_expires_minutes),
     }

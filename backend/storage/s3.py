@@ -51,6 +51,19 @@ class S3StorageProvider:
         except Exception:
             return False
 
+    def list(self, prefix: str) -> list[str]:
+        keys: list[str] = []
+        try:
+            # Paginated: a year of daily backups is small, but a recordings
+            # prefix is not, and a truncated listing would silently skip
+            # the objects an expiry pass is meant to remove.
+            paginator = self._client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix):
+                keys += [item["Key"] for item in page.get("Contents", [])]
+        except Exception as exc:  # noqa: BLE001 - surfaced as StorageError
+            raise StorageError(f"Could not list {prefix!r}: {exc}") from exc
+        return keys
+
     def delete(self, key: str) -> None:
         try:
             self._client.delete_object(Bucket=self._bucket, Key=key)

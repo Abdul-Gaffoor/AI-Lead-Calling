@@ -28,5 +28,8 @@ class StorageProvider(Protocol):
 
     def exists(self, key: str) -> bool: ...
 
+    def list(self, prefix: str) -> list[str]:
+        """Every key under `prefix`. Needed to expire old objects."""
+
     def delete(self, key: str) -> None:
         """Remove the object. Succeeds if it was already gone."""

@@ -45,6 +45,17 @@ class LocalStorageProvider:
     def exists(self, key: str) -> bool:
         return self._path(key).is_file()
 
+    def list(self, prefix: str) -> list[str]:
+        base = self._path(prefix) if prefix else self._root
+        if not base.exists():
+            return []
+        root = self._root.resolve()
+        return sorted(
+            str(path.resolve().relative_to(root))
+            for path in base.rglob("*")
+            if path.is_file()
+        )
+
     def delete(self, key: str) -> None:
         path = self._path(key)
         if path.is_file():

@@ -2,13 +2,31 @@ from backend.core.config import settings
 
 
 def test_login_success(client, admin_user):
+    """An enrolled administrator logs in with password + code (MVP §32)."""
+    from backend.auth import mfa as totp
+
     response = client.post(
-        "/auth/login", data={"username": admin_user.email, "password": "password123"}
+        "/auth/login",
+        data={
+            "username": admin_user.email,
+            "password": "password123",
+            "mfa_code": totp.code_at(admin_user.mfa_secret),
+        },
     )
     assert response.status_code == 200
     body = response.json()
     assert body["token_type"] == "bearer"
     assert body["access_token"]
+    assert body["scope"] == "full"
+
+
+def test_a_password_alone_does_not_get_an_administrator_in(client, admin_user):
+    """The whole point of §32: the password is no longer sufficient."""
+    response = client.post(
+        "/auth/login", data={"username": admin_user.email, "password": "password123"}
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "mfa_required"
 
 
 def test_login_wrong_password(client, admin_user):

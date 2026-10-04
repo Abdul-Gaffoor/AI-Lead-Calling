@@ -44,3 +44,28 @@ def purge_recordings() -> dict:
         )
         db.commit()
     return {"deleted": deleted}
+
+
+@celery_app.task(name="workers.tasks.backup_database")
+def backup_database() -> dict:
+    """Dump the database to object storage (MVP §32).
+
+    Reports rather than raises on failure: a backup that could not be
+    taken must be visible in the worker log and the task result, but it
+    must not retry in a loop against a database that is already
+    struggling.
+    """
+    from backend.core.backup import BackupError, run_backup
+
+    try:
+        result = run_backup()
+    except BackupError as exc:
+        logger.error("Database backup failed: %s", exc)
+        return {"ok": False, "error": str(exc)}
+    return {
+        "ok": True,
+        "key": result.key,
+        "size_bytes": result.size_bytes,
+        "took_seconds": round(result.took_seconds, 1),
+        "pruned": result.pruned,
+    }

@@ -4,6 +4,7 @@ Run the worker with:  celery -A workers.celery_app worker --beat
 """
 
 from celery import Celery
+from celery.schedules import crontab
 
 from backend.core.config import settings
 
@@ -36,6 +37,14 @@ celery_app.conf.update(
         "purge-recordings": {
             "task": "workers.tasks.purge_recordings",
             "schedule": 86400.0,
+        },
+        # MVP §32. Nightly, in the quiet hours: the calling window is
+        # 10:00-18:00 IST, so a dump at 02:00 IST competes with nothing.
+        "backup-database": {
+            "task": "workers.tasks.backup_database",
+            "schedule": crontab(
+                hour=(settings.backup_hour_ist - 5) % 24, minute=30
+            ),
         },
     },
 )

@@ -1,12 +1,14 @@
 import hashlib
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import settings
+from backend.core.logging_filters import install as install_pii_filter
+from backend.core.ratelimit import enforce
 from backend.core.database import Base, engine
 
 # Import all model modules so Base.metadata is complete before create_all /
@@ -44,6 +46,46 @@ from backend.surveys.router import router as surveys_router
 
 def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name, version="0.1.0")
+
+    # MVP §32: mask personal data in anything this process logs. Installed
+    # on the handlers rather than a logger, so a leak from any module —
+    # including a third-party library's own logging — is covered.
+    if settings.mask_pii_in_logs:
+        install_pii_filter()
+
+    @app.middleware("http")
+    async def rate_limit(request, call_next):
+        """MVP §32. Login is limited separately and much harder.
+
+        Middleware runs outside FastAPI's exception handlers, so an
+        HTTPException raised here would escape as a 500 rather than
+        becoming a 429. The response is built directly instead.
+        """
+        path = request.url.path
+        try:
+            if path.startswith("/auth/login"):
+                enforce(
+                    request,
+                    limit=settings.login_rate_limit_per_minute,
+                    window_s=settings.rate_limit_window_s,
+                    scope="login",
+                )
+            elif not path.startswith(("/health", "/static", "/assets")):
+                # Health is exempt so a rate-limited API still reports its
+                # state to the deploy check and to Docker.
+                enforce(
+                    request,
+                    limit=settings.rate_limit_per_minute,
+                    window_s=settings.rate_limit_window_s,
+                    scope="api",
+                )
+        except HTTPException as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail},
+                headers=exc.headers or {},
+            )
+        return await call_next(request)
 
     app.add_middleware(
         CORSMiddleware,

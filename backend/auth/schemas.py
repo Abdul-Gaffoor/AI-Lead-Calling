@@ -8,6 +8,11 @@ from backend.auth.models import Role
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    #: "full" for a normal session. "mfa_enrolment" means the password was
+    #: right but the account must finish setting up MFA before the token
+    #: opens anything else (MVP §32).
+    scope: str = "full"
+    detail: str | None = None
 
 
 class UserCreate(BaseModel):
@@ -26,3 +31,15 @@ class UserOut(BaseModel):
     role: Role
     is_active: bool
     created_at: dt.datetime
+
+
+class MfaSetup(BaseModel):
+    """Everything the user needs to enrol, shown exactly once."""
+
+    secret: str
+    otpauth_uri: str
+    recovery_codes: list[str]
+
+
+class MfaCode(BaseModel):
+    code: str

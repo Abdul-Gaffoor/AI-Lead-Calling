@@ -77,6 +77,23 @@ class Settings(BaseSettings):
     # Streaming providers for the real-time media bridge (MVP §9). Empty
     # means "use the batch provider's name", so a vendor that does both is
     # configured once. A vendor good at one and not the other is set apart.
+    # MVP §32: MFA for administrators. Roles listed here cannot hold a
+    # session without it once they have set it up, and are told to set it
+    # up when they have not. Comma-separated; empty disables the
+    # requirement without removing the feature.
+    # API rate limiting (MVP §32). Login is far tighter than the rest:
+    # it is where passwords and one-time codes would be guessed.
+    rate_limit_per_minute: int = 300
+    login_rate_limit_per_minute: int = 10
+    rate_limit_window_s: int = 60
+    #: Mask phone numbers, emails and Aadhaar-shaped runs in log output.
+    mask_pii_in_logs: bool = True
+    # Database backups (MVP §32). Written to the configured storage
+    # provider, same as recordings. 0 disables the schedule.
+    backup_hour_ist: int = 2
+    backup_retention_days: int = 30
+    mfa_required_roles: str = "SUPER_ADMIN"
+    mfa_issuer: str = "Swaraj Solar"
     streaming_speech_provider: str = "mock"
     streaming_voice_provider: str = "mock"
     streaming_llm_provider: str = "mock"

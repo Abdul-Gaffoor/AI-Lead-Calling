@@ -1,7 +1,7 @@
 import datetime as dt
 import enum
 
-from sqlalchemy import Boolean, DateTime, Enum, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Enum, Integer, JSON, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.core.database import Base
@@ -27,6 +27,13 @@ class User(Base):
 
     # Account lockout (security requirement, MVP section 32)
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # MFA (MVP §32). The secret is the shared TOTP key; recovery codes are
+    # stored hashed, so a stolen database yields no usable code. Both stay
+    # null until the user completes setup — generating a secret is not the
+    # same as proving they can produce codes from it.
+    mfa_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mfa_recovery_codes: Mapped[list | None] = mapped_column(JSON, nullable=True)
     locked_until: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[dt.datetime] = mapped_column(
