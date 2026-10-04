@@ -74,6 +74,19 @@ class Settings(BaseSettings):
     # ---- AI voice pipeline (MVP sections 9-11) ----
     # Providers: "mock" makes no network calls and costs nothing.
     speech_provider: str = "mock"  # mock | elevenlabs
+    # Streaming providers for the real-time media bridge (MVP §9). Empty
+    # means "use the batch provider's name", so a vendor that does both is
+    # configured once. A vendor good at one and not the other is set apart.
+    streaming_speech_provider: str = "mock"
+    streaming_voice_provider: str = "mock"
+    streaming_llm_provider: str = "mock"
+    # Endpointing. Raise silence_ms if customers are being cut off
+    # mid-answer; lower it if the AI feels slow to respond.
+    vad_threshold: float = 0.02
+    vad_silence_ms: int = 700
+    max_utterance_ms: int = 30_000
+    #: Media bridge gives up on a silent call rather than holding the line.
+    media_idle_timeout_s: int = 60
     llm_provider: str = "mock"  # mock | claude
     voice_provider: str = "mock"  # mock | elevenlabs
 

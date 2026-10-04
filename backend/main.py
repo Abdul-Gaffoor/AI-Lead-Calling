@@ -25,6 +25,7 @@ from backend.customers import models as customer_models  # noqa: F401
 from backend.leads import models as lead_models  # noqa: F401
 
 from backend.ai.router import router as ai_router
+from backend.ai.media_router import router as media_router
 from backend.auth.router import router as auth_router
 from backend.calls.router import router as calls_router
 from backend.campaigns.router import router as campaigns_router
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(campaigns_router)
     app.include_router(calls_router)
     app.include_router(ai_router)
+    app.include_router(media_router)
     app.include_router(customers_router)
     app.include_router(compliance_router)
     app.include_router(knowledge_router)

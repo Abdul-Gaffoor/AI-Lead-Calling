@@ -110,3 +110,139 @@ class MockVoiceProvider:
     def synthesize(self, text: str, *, language: str = "te-IN") -> Speech:
         self.synthesized.append(text)
         return Speech(audio=text.encode("utf-8"), mime_type="audio/mpeg", voice_id="mock-voice")
+
+
+# ---------------------------------------------------------------------------
+# Streaming mocks (MVP section 9).
+#
+# The media bridge needs providers that stream. These behave like the batch
+# mocks above — deterministic, no network, free — so a whole real-time call
+# can be exercised end to end before any vendor account exists.
+# ---------------------------------------------------------------------------
+
+from collections.abc import Iterator  # noqa: E402
+
+from backend.ai.streaming import (  # noqa: E402
+    DEFAULT_SAMPLE_RATE,
+    FRAME_MS,
+    AudioChunk,
+    ReplyStream,
+    TranscriptEvent,
+    sentences,
+)
+
+
+class MockSpeechSession:
+    """A speech stream over mock audio.
+
+    Mock audio frames are UTF-8 text, the same trick the batch mock uses, so
+    a test can "say" something by sending bytes and get exactly that back.
+    Silence frames (all zero bytes, which is what the VAD sees as silence)
+    carry no text and are skipped.
+    """
+
+    def __init__(self, language: str | None = None, sample_rate: int = DEFAULT_SAMPLE_RATE):
+        self.language = language or "te-IN"
+        self.sample_rate = sample_rate
+        self.closed = False
+        self._heard: list[str] = []
+        self._audio_ms = 0
+
+    @staticmethod
+    def _text_of(frame: bytes) -> str:
+        # Silence is PCM zeroes; anything else is a test speaking.
+        if not frame or not frame.strip(b"\x00"):
+            return ""
+        return frame.decode("utf-8", errors="replace").strip("\x00")
+
+    def push(self, frame: bytes) -> list[TranscriptEvent]:
+        self._audio_ms += FRAME_MS
+        text = self._text_of(frame)
+        if not text:
+            return []
+        self._heard.append(text)
+        # A partial after every spoken frame, so barge-in has something to
+        # fire on before the utterance is over.
+        return [
+            TranscriptEvent(
+                text=" ".join(self._heard),
+                is_final=False,
+                language=self._detect(),
+                audio_ms=self._audio_ms,
+            )
+        ]
+
+    def flush(self) -> list[TranscriptEvent]:
+        if not self._heard:
+            return []
+        text = " ".join(self._heard)
+        self._heard = []
+        return [
+            TranscriptEvent(
+                text=text, is_final=True, language=self._detect(text), audio_ms=self._audio_ms
+            )
+        ]
+
+    def _detect(self, text: str | None = None) -> str:
+        source = text if text is not None else " ".join(self._heard)
+        return "te-IN" if any("ఀ" <= c <= "౿" for c in source) else "en-IN"
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class MockStreamingSpeechProvider:
+    name = "mock"
+
+    def __init__(self) -> None:
+        self.sessions: list[MockSpeechSession] = []
+
+    def open(
+        self, *, language: str | None = None, sample_rate: int = DEFAULT_SAMPLE_RATE
+    ) -> MockSpeechSession:
+        session = MockSpeechSession(language=language, sample_rate=sample_rate)
+        self.sessions.append(session)
+        return session
+
+
+class MockStreamingVoiceProvider:
+    name = "mock"
+
+    def __init__(self) -> None:
+        self.synthesized: list[str] = []
+
+    def stream(
+        self, text: str, *, language: str = "te-IN", sample_rate: int = DEFAULT_SAMPLE_RATE
+    ) -> Iterator[AudioChunk]:
+        self.synthesized.append(text)
+        pieces = list(sentences(text)) or [text]
+        for index, piece in enumerate(pieces):
+            yield AudioChunk(
+                audio=piece.encode("utf-8"),
+                mime_type="audio/pcm",
+                sample_rate=sample_rate,
+                final=index == len(pieces) - 1,
+            )
+
+
+class MockStreamingLLMProvider:
+    """Streams the batch mock's reply word by word, then its decision."""
+
+    name = "mock"
+
+    def __init__(self) -> None:
+        self._batch = MockLLMProvider()
+        self.calls: list[list[dict]] = []
+
+    def stream(self, *, system: str, messages: list[dict]) -> ReplyStream:
+        self.calls.append(messages)
+        decision = self._batch.generate(system=system, messages=messages)
+
+        def chunks() -> Iterator[str]:
+            words = decision.reply.split(" ")
+            for index, word in enumerate(words):
+                yield word if index == len(words) - 1 else word + " "
+
+        stream = ReplyStream(chunks=chunks())
+        stream.set_decision(decision)
+        return stream
