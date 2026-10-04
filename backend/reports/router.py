@@ -7,6 +7,7 @@ from backend.auth.dependencies import get_current_user
 from backend.auth.models import User
 from backend.core.database import get_db
 from backend.reports.service import call_metrics, daily_dashboard, funnel
+from backend.reports.success import success_criteria
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -37,3 +38,17 @@ def calls_report(
     _: User = Depends(get_current_user),
 ):
     return call_metrics(db)
+
+
+@router.get("/success-criteria")
+def success(
+    since: dt.date | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """MVP §38, measured rather than asserted.
+
+    Every derived figure carries the assumptions behind it, and a measure
+    with no data says so instead of reporting zero.
+    """
+    return success_criteria(db, since=since)

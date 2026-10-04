@@ -100,6 +100,14 @@ class Settings(BaseSettings):
     # EXOTEL_TRANSFER_FLOW_APP_ID is required for "flow".
     exotel_transfer_mode: str = "connect"
     exotel_transfer_flow_app_id: str = ""
+    # MVP §38 cost and saving inputs. PLACEHOLDERS, like the solar engine
+    # constants (rule 7): they produce figures that end up in a board pack,
+    # so they travel with every answer and need replacing with the real
+    # invoices and a timed human baseline before anyone quotes them.
+    telephony_cost_per_minute: float = 0.0
+    ai_cost_per_minute: float = 0.0
+    manual_minutes_per_connected_call: float = 6.0
+    manual_minutes_per_unanswered_call: float = 1.0
     mfa_required_roles: str = "SUPER_ADMIN"
     mfa_issuer: str = "Swaraj Solar"
     streaming_speech_provider: str = "mock"
