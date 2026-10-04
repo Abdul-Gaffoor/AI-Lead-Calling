@@ -18,7 +18,7 @@ Daily CSV/XLSX + website API
    Campaign engine ──→ dispatcher (calling window, concurrency, retries)
         ↓
    Telephony provider (mock | Exotel)
-        ↓
+        ↓  media bridge: WebSocket audio ⇄ VAD/endpointing ⇄ barge-in
    AI voice agent:  STT → LLM (+ lead context, qualification state) → TTS
         ↓
    Disposition → scoring → opportunity + site survey → sales queue
@@ -42,11 +42,12 @@ Daily CSV/XLSX + website API
 `compliance` suppression list & audit log · `telephony` provider abstraction ·
 `knowledge` curated content, embeddings & retrieval ·
 `quality` recordings, review & AI-quality metrics · `storage` object storage
+`evaluation` MVP §37 corpus runner & §38 report
 
 ## Commands
 
 ```bash
-.venv/bin/python -m pytest -q                              # 400 tests
+.venv/bin/python -m pytest -q                              # 421 tests
 .venv/bin/uvicorn backend.main:app --reload                # API + console at /
 .venv/bin/alembic -c database/alembic.ini upgrade head     # migrations
 .venv/bin/celery -A workers.celery_app worker --beat       # dispatcher (needs Redis)

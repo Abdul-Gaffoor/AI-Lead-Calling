@@ -1,7 +1,7 @@
 # Handover — state of the platform
 
-Last updated: 2026-10-03 · 319 tests passing on SQLite and PostgreSQL
-· 6 migrations · live at https://voice.wayfinderops.com
+Last updated: 2026-10-04 · 421 tests passing on SQLite and PostgreSQL
+· 8 migrations · live at https://voice.wayfinderops.com
 
 ---
 
@@ -94,14 +94,49 @@ Everything below is implemented, tested and deployed.
 
 ---
 
+### Real-time media (MVP §9)
+- `backend/ai/streaming.py` — streaming STT/TTS/LLM protocols beside the batch
+  ones, so a vendor good at one and not the other can be used for either.
+- `backend/ai/vad.py` — energy VAD and endpointing, with a pre-roll buffer so
+  the first syllable of an answer is not clipped.
+- `backend/ai/media.py` — `MediaSession`, transport-free: frames in, audio out.
+  A whole call is driven in tests as a list of byte strings.
+- `backend/ai/media_router.py` — the WebSocket a telephony provider connects to.
+- Barge-in works; opt-out spoken on a live call still suppresses the number.
+- Still STT → LLM → TTS, deliberately: rules 1–3 need a text checkpoint.
+
+### Security (MVP §32)
+- **MFA** for administrators — RFC 6238 TOTP, verified against the published
+  test vectors, with hashed single-use recovery codes. An unenrolled admin gets
+  a token scoped to enrolment only, so turning it on cannot lock anyone out.
+- **Rate limiting** — Redis-backed where available, login far tighter than the
+  rest, health exempt.
+- **PII masking** in logs — phone numbers, emails and Aadhaar-shaped runs.
+- **Nightly backups** — pg_dump to object storage, retention enforced.
+
+### Live transfer (MVP §23)
+- Picks the least-loaded available executive; industrial and commercial try a
+  manager first. A priority callback is booked when nobody is free or the
+  provider refuses, and the disposition records what actually happened.
+- `EXOTEL_TRANSFER_MODE` selects Connect-API or App-Bazaar-flow transfer.
+
+### Measurement (MVP §38) and observability (MVP §33)
+- `GET /reports/success-criteria` — the eight measures production traffic can
+  answer, each with its assumptions, each saying so when it has no data.
+- `/metrics` Prometheus endpoint and optional OpenTelemetry tracing, both off
+  by default.
+
+---
+
 ## 2. What is NOT built
 
 | Gap | Why it matters |
 |---|---|
-| **Real-time SIP media streaming** | The conversation API is turn-based. Wire it when the telephony account exists. |
 | **Native Telugu review of the corpus** | The 94 Telugu scenarios were drafted from the MVP, not written by a Telugu speaker. Until somebody reviews them, the scores measure the plumbing, not the Telugu. |
-| **Security hardening (MVP §32)** | MFA, API rate limiting, PII masking and database backups are all absent. |
-| **Live transfer (MVP §23)** | `exotel.py` raises — the mechanism has to be configured on the Exotel account first. |
+| **A tested restore** | Backups are taken nightly; nothing has ever been restored from one. A backup nobody has restored is a hypothesis. |
+| **The human baseline for §38** | The "Current Human Process" half of the comparison needs timing from Swaraj's own team. Left null rather than guessed. |
+| **Exotel account** | KYC, an ExoPhone, credits and a flow app id. Every real call waits on this. |
+| **Knowledge approval** | All 14 documents ship unapproved, so the AI has no approved FAQ content on a call. |
 
 ---
 

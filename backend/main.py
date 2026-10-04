@@ -1,13 +1,14 @@
 import hashlib
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import settings
 from backend.core.logging_filters import install as install_pii_filter
+from backend.core.observability import Timer, metrics, record_request, setup_tracing
 from backend.core.ratelimit import enforce
 from backend.core.database import Base, engine
 
@@ -52,6 +53,24 @@ def create_app() -> FastAPI:
     # including a third-party library's own logging — is covered.
     if settings.mask_pii_in_logs:
         install_pii_filter()
+
+    @app.middleware("http")
+    async def observe(request: Request, call_next):
+        """Time every request (MVP §33).
+
+        Labelled with the route template, never the resolved path: a label
+        of /calls/8213 would create one time series per call.
+        """
+        with Timer() as timer:
+            response = await call_next(request)
+        route = request.scope.get("route")
+        record_request(
+            request.method,
+            getattr(route, "path", request.url.path),
+            response.status_code,
+            timer.seconds,
+        )
+        return response
 
     @app.middleware("http")
     async def rate_limit(request, call_next):
@@ -111,6 +130,38 @@ def create_app() -> FastAPI:
     app.include_router(reports_router)
     app.include_router(quality_router)
     app.include_router(public_router)
+
+    # MVP §33. Says so plainly if it was asked for and could not start:
+    # absent spans look exactly like absent traffic.
+    setup_tracing(app)
+
+    @app.get("/metrics", tags=["system"], include_in_schema=False)
+    def prometheus_metrics(request: Request):
+        """Prometheus scrape endpoint (MVP §33).
+
+        Off unless METRICS_ENABLED. When on, it is reachable from
+        loopback, or from anywhere with METRICS_TOKEN — the series names
+        alone describe the business (how many calls, how many opt-outs),
+        so this is not public even though it carries no personal data.
+        """
+        if not settings.metrics_enabled:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Metrics are not enabled")
+
+        if settings.metrics_token:
+            supplied = request.query_params.get("token") or request.headers.get(
+                "x-metrics-token"
+            )
+            if supplied != settings.metrics_token:
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid metrics token")
+        elif (request.client.host if request.client else "") not in ("127.0.0.1", "::1"):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Set METRICS_TOKEN to scrape from outside the host",
+            )
+
+        return PlainTextResponse(
+            metrics.render(), media_type="text/plain; version=0.0.4; charset=utf-8"
+        )
 
     @app.get("/health", tags=["system"])
     def health():

@@ -32,6 +32,7 @@ from backend.auth.models import Role, User
 from backend.calls.models import CallAttempt, Disposition
 from backend.calls.service import record_disposition, utcnow
 from backend.compliance.service import log_action
+from backend.core.observability import record_transfer
 from backend.sales.models import Opportunity, OpportunityStage
 from backend.telephony.base import TelephonyError
 from backend.telephony.factory import get_telephony_provider
@@ -152,6 +153,7 @@ def transfer_to_executive(
         details={"executive_id": executive.id, "senior": senior},
     )
     logger.info("Call %s transferred to executive %s", attempt.id, executive.id)
+    record_transfer("connected")
     return TransferResult(outcome=Outcome.CONNECTED, executive=executive)
 
 
@@ -185,6 +187,7 @@ def _priority_callback(
         "Call %s could not be transferred (%s); callback booked for %s",
         attempt.id, reason, callback_at,
     )
+    record_transfer("callback")
     return TransferResult(
         outcome=Outcome.CALLBACK,
         executive=None,

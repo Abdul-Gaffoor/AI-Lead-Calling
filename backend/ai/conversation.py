@@ -29,6 +29,7 @@ from backend.ai.qualification import is_sufficient, missing_fields
 from backend.calls.models import CallAttempt, Disposition
 from backend.calls.service import record_disposition, utcnow
 from backend.core.config import settings
+from backend.core.observability import record_ai_turn
 from backend.customers.models import Customer
 from backend.knowledge import service as knowledge
 from backend.sales.service import create_from_call
@@ -205,6 +206,7 @@ def handle_turn(
         )
 
     latency_ms = int((time.monotonic() - started) * 1000)
+    record_ai_turn(latency_ms / 1000, conversation.language or "unknown")
     _add_turn(db, conversation, Speaker.AI, decision.reply, decision.language, latency_ms)
 
     if decision.intent in TERMINAL_INTENTS:

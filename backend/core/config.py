@@ -104,6 +104,15 @@ class Settings(BaseSettings):
     # constants (rule 7): they produce figures that end up in a board pack,
     # so they travel with every answer and need replacing with the real
     # invoices and a timed human baseline before anyone quotes them.
+    # Observability (MVP §33). Off by default: everything else in this
+    # platform makes no network call until switched on, and a tracing
+    # exporter shipping call metadata somewhere would be the exception.
+    metrics_enabled: bool = False
+    #: Protects /metrics when it is on. Empty means loopback only.
+    metrics_token: str = ""
+    otel_enabled: bool = False
+    otel_endpoint: str = ""
+    otel_service_name: str = "swaraj-solar-api"
     telephony_cost_per_minute: float = 0.0
     ai_cost_per_minute: float = 0.0
     manual_minutes_per_connected_call: float = 6.0
