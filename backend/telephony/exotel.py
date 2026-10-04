@@ -196,9 +196,61 @@ class ExotelProvider:
         )
 
     def transfer(self, provider_call_id: str, to_number: str) -> None:
+        """Join the live call to a sales executive (MVP §23).
+
+        Exotel offers more than one way to do this and which one an
+        account has depends on its plan, so the mechanism is configured
+        rather than guessed at:
+
+        * ``connect`` posts to the Connect endpoint, dialling the
+          executive and bridging them to the customer.
+        * ``flow`` hands the call to an App Bazaar flow that does the
+          connecting, which is what accounts using a voicebot applet
+          usually have.
+
+        Either way a failure raises, so the caller falls back to a
+        priority callback rather than leaving the customer on a dead line.
+        """
+        if not provider_call_id:
+            raise TelephonyError("Cannot transfer a call with no provider call id")
+        if not to_number:
+            raise TelephonyError("Cannot transfer a call with no destination number")
+
+        mode = (settings.exotel_transfer_mode or "connect").strip().lower()
+
+        if mode == "flow":
+            app_id = settings.exotel_transfer_flow_app_id
+            if not app_id:
+                raise TelephonyError(
+                    "EXOTEL_TRANSFER_MODE=flow needs EXOTEL_TRANSFER_FLOW_APP_ID"
+                )
+            self._post(
+                "/Calls/connect.json",
+                {
+                    "CallSid": provider_call_id,
+                    "Url": (
+                        f"http://my.exotel.com/{settings.exotel_sid}"
+                        f"/exoml/start_voice/{app_id}"
+                    ),
+                    "CallType": "trans",
+                },
+            )
+            return
+
+        if mode == "connect":
+            self._post(
+                "/Calls/connect.json",
+                {
+                    "CallSid": provider_call_id,
+                    "To": to_number,
+                    "CallerId": settings.exotel_caller_id,
+                    "CallType": "trans",
+                },
+            )
+            return
+
         raise TelephonyError(
-            "Live transfer must be configured on the Exotel call flow; "
-            "confirm the account's transfer mechanism before use"
+            f"Unknown EXOTEL_TRANSFER_MODE {mode!r}; expected 'connect' or 'flow'"
         )
 
     def hangup(self, provider_call_id: str) -> None:

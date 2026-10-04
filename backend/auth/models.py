@@ -24,6 +24,13 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[Role] = mapped_column(Enum(Role, name="user_role"), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Live transfer (MVP §23). A call cannot be handed to an executive
+    # without a number to hand it to, and "is_active" means "may sign in",
+    # which is not the same as "is at their desk right now".
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    available_for_transfer: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
 
     # Account lockout (security requirement, MVP section 32)
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

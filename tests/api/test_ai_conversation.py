@@ -131,7 +131,11 @@ def test_lead_context_is_given_to_the_model(client, admin_headers, answered_call
     "utterance,intent,disposition",
     [
         ("I want a site survey", "SITE_SURVEY_REQUESTED", "SITE_SURVEY_REQUESTED"),
-        ("I want to talk to a sales person", "HUMAN_REQUEST", "HUMAN_TRANSFER"),
+        # With no executive marked available — which is the case in this
+        # fixture — MVP §23 says the outcome is a priority callback, not a
+        # transfer. Recording HUMAN_TRANSFER would tell the §27 dashboard
+        # the customer reached a person when nobody picked up.
+        ("I want to talk to a sales person", "HUMAN_REQUEST", "CALLBACK_REQUESTED"),
         ("not interested", "NOT_INTERESTED", "NOT_INTERESTED"),
         ("this is a wrong number", "WRONG_NUMBER", "WRONG_NUMBER"),
         ("I already have solar installed", "EXISTING_CUSTOMER", "EXISTING_CUSTOMER"),
@@ -221,7 +225,9 @@ def test_llm_failure_falls_back_to_human_not_dead_air(
     assert body["intent"] == "HUMAN_REQUEST"
     assert body["reply"]  # the customer hears something, not silence
     call = client.get(f"/calls/{answered_call['id']}", headers=admin_headers).json()
-    assert call["disposition"] == "HUMAN_TRANSFER"
+    # Nobody is available in this fixture, so §23's fallback applies: the
+    # customer is handed a priority callback rather than dead air.
+    assert call["disposition"] == "CALLBACK_REQUESTED"
 
 
 def test_conversation_cannot_run_forever(client, admin_headers, answered_call, monkeypatch):

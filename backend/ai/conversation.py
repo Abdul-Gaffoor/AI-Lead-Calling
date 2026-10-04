@@ -33,7 +33,7 @@ from backend.customers.models import Customer
 from backend.knowledge import service as knowledge
 from backend.sales.service import create_from_call
 from backend.scoring.service import score_lead
-from backend.leads.models import Lead
+from backend.leads.models import Lead, ServiceType
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,13 @@ HUMAN_REQUEST_PHRASES = (
     "manishi tho",
     "మనిషితో",
     "sales person tho",
+)
+
+#: MVP §15: "High-value industrial leads should automatically route to a
+#: senior executive/engineer." Commercial is included because those calls
+#: turn into price negotiation, which §23 also lists as an escalation.
+SENIOR_ESCALATION_SERVICES = frozenset(
+    {ServiceType.INDUSTRIAL_SOLAR, ServiceType.COMMERCIAL_SOLAR}
 )
 
 #: A qualified lead's disposition comes from its score, not a fixed value.
@@ -343,6 +350,30 @@ def _finalize(db: Session, conversation: Conversation, decision: TurnDecision, *
         score=score_result.score,
         classification=score_result.classification,
     )
+
+    # The customer asked for a person (MVP §23). Try to connect them while
+    # they are still on the line; a priority callback is booked if nobody
+    # is free. This runs after create_from_call so the executive picking up
+    # already has the opportunity and the summary in front of them.
+    if decision.intent is Intent.HUMAN_REQUEST:
+        from backend.sales.transfer import transfer_to_executive
+
+        result = transfer_to_executive(
+            db,
+            attempt,
+            senior=conversation.service in SENIOR_ESCALATION_SERVICES,
+            summary=conversation.summary,
+            actor=actor,
+        )
+        conversation.summary = (
+            f"{conversation.summary}\n\n"
+            + (
+                f"Transferred to {result.executive.full_name}."
+                if result.connected
+                else f"No executive available ({result.reason}); "
+                f"priority callback booked for {result.callback_at:%H:%M}."
+            )
+        )
 
 
 def structured_output(conversation: Conversation, score_result=None) -> dict:

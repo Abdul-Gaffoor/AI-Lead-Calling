@@ -17,8 +17,11 @@
   turns:
     - customer: "Sales person tho maatladali."
   expect:
+    # The intent is the deterministic guarantee. The disposition is not:
+    # MVP §23 makes it HUMAN_TRANSFER when an executive is free and
+    # CALLBACK_REQUESTED when none is, which depends on who is at their
+    # desk rather than on anything the orchestrator decides.
     intent: HUMAN_REQUEST
-    disposition: HUMAN_TRANSFER
 
 - id: human-te-manishi
   description: '"మనిషితో" — with a person'

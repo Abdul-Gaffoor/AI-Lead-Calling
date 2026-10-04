@@ -92,6 +92,14 @@ class Settings(BaseSettings):
     # provider, same as recordings. 0 disables the schedule.
     backup_hour_ist: int = 2
     backup_retention_days: int = 30
+    # Live transfer (MVP §23). Exotel exposes more than one way to join a
+    # live call to an agent and which one an account has depends on its
+    # plan, so the mechanism is configuration rather than a guess:
+    #   "connect"  — the Connect API, dialling the executive directly
+    #   "flow"     — hand the call to an App Bazaar flow that connects them
+    # EXOTEL_TRANSFER_FLOW_APP_ID is required for "flow".
+    exotel_transfer_mode: str = "connect"
+    exotel_transfer_flow_app_id: str = ""
     mfa_required_roles: str = "SUPER_ADMIN"
     mfa_issuer: str = "Swaraj Solar"
     streaming_speech_provider: str = "mock"
